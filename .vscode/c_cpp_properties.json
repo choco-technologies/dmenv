@@ -1,0 +1,27 @@
+{
+    "version": 4,
+    "configurations": [
+        {
+            "name": "Linux",
+            "includePath": [
+                "${workspaceFolder}/include",
+                "${workspaceFolder}/src",
+                "${workspaceFolder}/build/_deps/dmod-src/inc",
+                "${workspaceFolder}/build/_deps/dmod-build/",
+                "/usr/include",
+                "/usr/local/include",
+                "/usr/include/x86_64-linux-gnu"
+            ],
+            "defines": [
+                "DMENV_VERSION=\"1.0\"",
+                "_GNU_SOURCE"
+            ],
+            "compilerPath": "/usr/bin/gcc",
+            "cStandard": "c11",
+            "cppStandard": "c++17",
+            "intelliSenseMode": "linux-gcc-x64",
+            "configurationProvider": "ms-vscode.cmake-tools",
+            "compileCommands": "${workspaceFolder}/build/compile_commands.json"
+        }
+    ]
+}

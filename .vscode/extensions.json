@@ -1,0 +1,17 @@
+{
+    "recommendations": [
+        "ms-vscode.cpptools",
+        "ms-vscode.cpptools-extension-pack",
+        "ms-vscode.cmake-tools",
+        "twxs.cmake",
+        "ms-vscode.hexeditor",
+        "vadimcn.vscode-lldb",
+        "xaver.clang-format",
+        "ms-vscode.makefile-tools",
+        "formulahendry.code-runner",
+        "ms-vscode.test-adapter-converter",
+        "matepek.vscode-catch2-test-adapter",
+        "github.copilot",
+        "ms-vscode.vscode-json"
+    ]
+}

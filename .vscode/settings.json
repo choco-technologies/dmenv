@@ -1,0 +1,44 @@
+{
+    "files.associations": {
+        "type_traits": "c",
+        "*.h": "c",
+        "*.c": "c",
+        "dmenv.h": "c"
+    },
+    "C_Cpp.default.configurationProvider": "ms-vscode.cmake-tools",
+    "C_Cpp.default.intelliSenseMode": "linux-gcc-x64",
+    "C_Cpp.default.compilerPath": "/usr/bin/gcc",
+    "C_Cpp.default.cStandard": "c11",
+    "C_Cpp.default.cppStandard": "c++17",
+    "C_Cpp.errorSquiggles": "enabled",
+    "C_Cpp.autocomplete": "default",
+    "C_Cpp.suggestSnippets": true,
+    "C_Cpp.enhancedColorization": "enabled",
+    "cmake.buildDirectory": "${workspaceFolder}/build",
+    "cmake.generator": "Unix Makefiles",
+    "cmake.buildTask": true,
+    "cmake.configureOnOpen": true,
+    "cmake.configureOnEdit": true,
+    "files.trimTrailingWhitespace": true,
+    "files.insertFinalNewline": true,
+    "editor.insertSpaces": true,
+    "editor.tabSize": 4,
+    "editor.detectIndentation": false,
+    "editor.formatOnSave": true,
+    "editor.rulers": [
+        80,
+        120
+    ],
+    "search.exclude": {
+        "**/build": true,
+        "**/Build": true,
+        "**/.git": true,
+        "**/node_modules": true,
+        "**/CMakeFiles": true,
+        "**/CMakeCache.txt": true
+    },
+    "files.exclude": {
+        "**/.git": true,
+        "**/.DS_Store": true
+    }
+}
