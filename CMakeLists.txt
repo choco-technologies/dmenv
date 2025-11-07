@@ -71,6 +71,12 @@ target_link_libraries(${MODULE_NAME}
         dmod_inc
     )
 
+# Enable coverage for dmenv library if requested
+if(ENABLE_COVERAGE)
+    target_compile_options(${MODULE_NAME} PRIVATE --coverage)
+    target_link_options(${MODULE_NAME} PRIVATE --coverage)
+endif()
+
 create_library_makefile(${MODULE_NAME})
 
 # ======================================================================

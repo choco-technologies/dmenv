@@ -36,3 +36,13 @@ add_test(NAME test_dmenv_unit COMMAND test_dmenv_unit)
 add_executable(test_minimal test_minimal.c)
 target_link_libraries(test_minimal PRIVATE dmenv unity test_common dmod_system)
 add_test(NAME test_minimal COMMAND test_minimal)
+
+# Enable coverage for test executables if requested
+if(ENABLE_COVERAGE)
+    target_compile_options(test_simple PRIVATE --coverage)
+    target_link_options(test_simple PRIVATE --coverage)
+    target_compile_options(test_dmenv_unit PRIVATE --coverage)
+    target_link_options(test_dmenv_unit PRIVATE --coverage)
+    target_compile_options(test_minimal PRIVATE --coverage)
+    target_link_options(test_minimal PRIVATE --coverage)
+endif()
