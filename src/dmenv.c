@@ -468,7 +468,7 @@ DMOD_INPUT_API_DECLARATION(dmenv, 1.0, size_t, _count, (dmenv_ctx_t ctx))
  * @param Name Name of the environment variable
  * @param Value Value to set
  * @param Overwrite If non-zero, overwrite existing variable; if zero, keep existing value
- * @return int 0 if successful, non-zero otherwise
+ * @return int 0 if successful, -1 otherwise
  */
 DMOD_INPUT_API_DECLARATION(Dmod, 1.0, int, _SetEnv, (const char *Name, const char *Value, int Overwrite))
 {
