@@ -1,62 +1,37 @@
 #include "dmenv.h"
 #include <string.h>
 #include <stdio.h>
-
-#ifndef DMENV_MAX_NAME_LENGTH
-#define DMENV_MAX_NAME_LENGTH 64
-#endif
-
-#ifndef DMENV_MAX_VALUE_LENGTH
-#define DMENV_MAX_VALUE_LENGTH 256
-#endif
+#include <stdlib.h>
 
 /**
  * @brief Structure to hold an environment variable entry
  */
 typedef struct env_entry {
-    char name[DMENV_MAX_NAME_LENGTH];
-    char value[DMENV_MAX_VALUE_LENGTH];
+    char* name;
+    char* value;
     struct env_entry* next;
 } env_entry_t;
 
 /**
  * @brief Context structure for the environment variables manager
  */
-typedef struct {
-    void* buffer;
-    size_t buffer_size;
+typedef struct dmenv_ctx {
     env_entry_t* head;
-    bool initialized;
+    dmenv_ctx_t parent;
     size_t entry_count;
-    size_t used_size;
-} dmenv_context_t;
+} dmenv_ctx_internal_t;
 
-static dmenv_context_t g_dmenv_context = {0};
+static dmenv_ctx_t g_default_context = NULL;
 
 /**
- * @brief Helper function to allocate an entry from the buffer
+ * @brief Helper function to find an entry by name in a context
  */
-static env_entry_t* allocate_entry(void) {
-    if (g_dmenv_context.used_size + sizeof(env_entry_t) > g_dmenv_context.buffer_size) {
-        DMOD_LOG_ERROR("Buffer full, cannot allocate new entry");
+static env_entry_t* find_entry(dmenv_ctx_t ctx, const char* name) {
+    if (!ctx || !name) {
         return NULL;
     }
     
-    env_entry_t* entry = (env_entry_t*)((char*)g_dmenv_context.buffer + g_dmenv_context.used_size);
-    g_dmenv_context.used_size += sizeof(env_entry_t);
-    memset(entry, 0, sizeof(env_entry_t));
-    return entry;
-}
-
-/**
- * @brief Helper function to find an entry by name
- */
-static env_entry_t* find_entry(const char* name) {
-    if (!name || !g_dmenv_context.initialized) {
-        return NULL;
-    }
-    
-    env_entry_t* current = g_dmenv_context.head;
+    env_entry_t* current = ((dmenv_ctx_internal_t*)ctx)->head;
     while (current != NULL) {
         if (strcmp(current->name, name) == 0) {
             return current;
@@ -66,42 +41,109 @@ static env_entry_t* find_entry(const char* name) {
     return NULL;
 }
 
+/**
+ * @brief Helper function to recursively search in parent contexts
+ */
+static env_entry_t* find_entry_with_inheritance(dmenv_ctx_t ctx, const char* name) {
+    if (!ctx || !name) {
+        return NULL;
+    }
+    
+    env_entry_t* entry = find_entry(ctx, name);
+    if (entry != NULL) {
+        return entry;
+    }
+    
+    // Search in parent context
+    dmenv_ctx_internal_t* internal = (dmenv_ctx_internal_t*)ctx;
+    if (internal->parent != NULL) {
+        return find_entry_with_inheritance(internal->parent, name);
+    }
+    
+    return NULL;
+}
+
 // ============================================================================
 //                           DMOD API Implementations
 // ============================================================================
 
-DMOD_INPUT_API_DECLARATION( dmenv, 1.0, bool, _init, ( void* buffer, size_t size ) )
+DMOD_INPUT_API_DECLARATION( dmenv, 1.0, dmenv_ctx_t, _create, ( dmenv_ctx_t parent ) )
 {
-    if (!buffer || size < sizeof(env_entry_t)) {
-        DMOD_LOG_ERROR("Invalid buffer or size for initialization");
-        return false;
+    Dmod_EnterCritical();
+    
+    dmenv_ctx_internal_t* ctx = (dmenv_ctx_internal_t*)Dmod_MallocEx(sizeof(dmenv_ctx_internal_t), "dmenv");
+    if (ctx == NULL) {
+        DMOD_LOG_ERROR("Failed to allocate memory for context");
+        Dmod_ExitCritical();
+        return NULL;
+    }
+    
+    ctx->head = NULL;
+    ctx->parent = parent;
+    ctx->entry_count = 0;
+    
+    DMOD_LOG_INFO("== dmenv ver. %s ==", DMENV_VERSION);
+    DMOD_LOG_INFO("Created context %p with parent %p", ctx, parent);
+    
+    Dmod_ExitCritical();
+    
+    return (dmenv_ctx_t)ctx;
+}
+
+DMOD_INPUT_API_DECLARATION( dmenv, 1.0, void, _destroy, ( dmenv_ctx_t ctx ) )
+{
+    if (!ctx) {
+        return;
     }
     
     Dmod_EnterCritical();
     
-    g_dmenv_context.buffer = buffer;
-    g_dmenv_context.buffer_size = size;
-    g_dmenv_context.head = NULL;
-    g_dmenv_context.initialized = true;
-    g_dmenv_context.entry_count = 0;
-    g_dmenv_context.used_size = 0;
+    dmenv_ctx_internal_t* internal = (dmenv_ctx_internal_t*)ctx;
     
-    DMOD_LOG_INFO("dmenv: Initialized with buffer %p of size %zu", buffer, size);
+    // Free all entries
+    env_entry_t* current = internal->head;
+    while (current != NULL) {
+        env_entry_t* next = current->next;
+        Dmod_FreeEx(current->name, false);
+        Dmod_FreeEx(current->value, false);
+        Dmod_FreeEx(current, false);
+        current = next;
+    }
+    
+    // If this is the default context, clear it
+    if (g_default_context == ctx) {
+        g_default_context = NULL;
+    }
+    
+    Dmod_FreeEx(ctx, false);
+    
+    DMOD_LOG_INFO("Destroyed context %p", ctx);
     
     Dmod_ExitCritical();
-    
-    return true;
 }
 
-DMOD_INPUT_API_DECLARATION( dmenv, 1.0, bool, _is_initialized, ( void ) )
+DMOD_INPUT_API_DECLARATION( dmenv, 1.0, bool, _is_valid, ( dmenv_ctx_t ctx ) )
 {
-    return g_dmenv_context.initialized;
+    return ctx != NULL;
 }
 
-DMOD_INPUT_API_DECLARATION( dmenv, 1.0, bool, _set, ( const char* name, const char* value ) )
+DMOD_INPUT_API_DECLARATION( dmenv, 1.0, void, _set_as_default, ( dmenv_ctx_t ctx ) )
 {
-    if (!g_dmenv_context.initialized) {
-        DMOD_LOG_ERROR("Environment manager not initialized");
+    Dmod_EnterCritical();
+    g_default_context = ctx;
+    DMOD_LOG_INFO("Set context %p as default", ctx);
+    Dmod_ExitCritical();
+}
+
+DMOD_INPUT_API_DECLARATION( dmenv, 1.0, dmenv_ctx_t, _get_default, ( void ) )
+{
+    return g_default_context;
+}
+
+DMOD_INPUT_API_DECLARATION( dmenv, 1.0, bool, _set, ( dmenv_ctx_t ctx, const char* name, const char* value ) )
+{
+    if (!ctx) {
+        DMOD_LOG_ERROR("Invalid context");
         return false;
     }
     
@@ -110,45 +152,60 @@ DMOD_INPUT_API_DECLARATION( dmenv, 1.0, bool, _set, ( const char* name, const ch
         return false;
     }
     
-    if (strlen(name) >= DMENV_MAX_NAME_LENGTH) {
-        DMOD_LOG_ERROR("Name too long: %s", name);
-        return false;
-    }
-    
-    if (strlen(value) >= DMENV_MAX_VALUE_LENGTH) {
-        DMOD_LOG_ERROR("Value too long for name: %s", name);
-        return false;
-    }
-    
     Dmod_EnterCritical();
     
+    dmenv_ctx_internal_t* internal = (dmenv_ctx_internal_t*)ctx;
+    
     // Check if variable already exists
-    env_entry_t* existing = find_entry(name);
+    env_entry_t* existing = find_entry(ctx, name);
     if (existing != NULL) {
         // Update existing entry
-        strncpy(existing->value, value, DMENV_MAX_VALUE_LENGTH - 1);
-        existing->value[DMENV_MAX_VALUE_LENGTH - 1] = '\0';
+        char* new_value = (char*)Dmod_MallocEx(strlen(value) + 1, "dmenv");
+        if (new_value == NULL) {
+            DMOD_LOG_ERROR("Failed to allocate memory for value");
+            Dmod_ExitCritical();
+            return false;
+        }
+        strcpy(new_value, value);
+        Dmod_FreeEx(existing->value, false);
+        existing->value = new_value;
         DMOD_LOG_INFO("Updated variable %s = %s", name, value);
         Dmod_ExitCritical();
         return true;
     }
     
     // Create new entry
-    env_entry_t* entry = allocate_entry();
+    env_entry_t* entry = (env_entry_t*)Dmod_MallocEx(sizeof(env_entry_t), "dmenv");
     if (entry == NULL) {
+        DMOD_LOG_ERROR("Failed to allocate memory for entry");
         Dmod_ExitCritical();
         return false;
     }
     
-    strncpy(entry->name, name, DMENV_MAX_NAME_LENGTH - 1);
-    entry->name[DMENV_MAX_NAME_LENGTH - 1] = '\0';
-    strncpy(entry->value, value, DMENV_MAX_VALUE_LENGTH - 1);
-    entry->value[DMENV_MAX_VALUE_LENGTH - 1] = '\0';
+    entry->name = (char*)Dmod_MallocEx(strlen(name) + 1, "dmenv");
+    if (entry->name == NULL) {
+        DMOD_LOG_ERROR("Failed to allocate memory for name");
+        Dmod_FreeEx(entry, false);
+        Dmod_ExitCritical();
+        return false;
+    }
+    
+    entry->value = (char*)Dmod_MallocEx(strlen(value) + 1, "dmenv");
+    if (entry->value == NULL) {
+        DMOD_LOG_ERROR("Failed to allocate memory for value");
+        Dmod_FreeEx(entry->name, false);
+        Dmod_FreeEx(entry, false);
+        Dmod_ExitCritical();
+        return false;
+    }
+    
+    strcpy(entry->name, name);
+    strcpy(entry->value, value);
     
     // Add to linked list
-    entry->next = g_dmenv_context.head;
-    g_dmenv_context.head = entry;
-    g_dmenv_context.entry_count++;
+    entry->next = internal->head;
+    internal->head = entry;
+    internal->entry_count++;
     
     DMOD_LOG_INFO("Set variable %s = %s", name, value);
     
@@ -157,10 +214,10 @@ DMOD_INPUT_API_DECLARATION( dmenv, 1.0, bool, _set, ( const char* name, const ch
     return true;
 }
 
-DMOD_INPUT_API_DECLARATION( dmenv, 1.0, const char*, _get, ( const char* name ) )
+DMOD_INPUT_API_DECLARATION( dmenv, 1.0, const char*, _get, ( dmenv_ctx_t ctx, const char* name ) )
 {
-    if (!g_dmenv_context.initialized) {
-        DMOD_LOG_ERROR("Environment manager not initialized");
+    if (!ctx) {
+        DMOD_LOG_ERROR("Invalid context");
         return NULL;
     }
     
@@ -171,7 +228,7 @@ DMOD_INPUT_API_DECLARATION( dmenv, 1.0, const char*, _get, ( const char* name ) 
     
     Dmod_EnterCritical();
     
-    env_entry_t* entry = find_entry(name);
+    env_entry_t* entry = find_entry_with_inheritance(ctx, name);
     
     Dmod_ExitCritical();
     
@@ -184,10 +241,42 @@ DMOD_INPUT_API_DECLARATION( dmenv, 1.0, const char*, _get, ( const char* name ) 
     return NULL;
 }
 
-DMOD_INPUT_API_DECLARATION( dmenv, 1.0, size_t, _find, ( const char* prefix, void (*callback)(const char* name, const char* value, void* user_data), void* user_data ) )
+DMOD_INPUT_API_DECLARATION( dmenv, 1.0, bool, _seti, ( dmenv_ctx_t ctx, const char* name, uint32_t value ) )
 {
-    if (!g_dmenv_context.initialized) {
-        DMOD_LOG_ERROR("Environment manager not initialized");
+    char buffer[32];
+    snprintf(buffer, sizeof(buffer), "0x%X", value);
+    return dmenv_set(ctx, name, buffer);
+}
+
+DMOD_INPUT_API_DECLARATION( dmenv, 1.0, bool, _geti, ( dmenv_ctx_t ctx, const char* name, uint32_t* out_value ) )
+{
+    if (!out_value) {
+        DMOD_LOG_ERROR("Invalid output pointer");
+        return false;
+    }
+    
+    const char* str_value = dmenv_get(ctx, name);
+    if (str_value == NULL) {
+        return false;
+    }
+    
+    // Try to parse as hex or decimal
+    char* endptr;
+    unsigned long parsed = strtoul(str_value, &endptr, 0);  // 0 = auto-detect base
+    
+    if (endptr == str_value || *endptr != '\0') {
+        DMOD_LOG_ERROR("Failed to parse value '%s' as integer", str_value);
+        return false;
+    }
+    
+    *out_value = (uint32_t)parsed;
+    return true;
+}
+
+DMOD_INPUT_API_DECLARATION( dmenv, 1.0, size_t, _find, ( dmenv_ctx_t ctx, const char* prefix, dmenv_find_callback_t callback, void* user_data ) )
+{
+    if (!ctx) {
+        DMOD_LOG_ERROR("Invalid context");
         return 0;
     }
     
@@ -201,7 +290,8 @@ DMOD_INPUT_API_DECLARATION( dmenv, 1.0, size_t, _find, ( const char* prefix, voi
     
     Dmod_EnterCritical();
     
-    env_entry_t* current = g_dmenv_context.head;
+    dmenv_ctx_internal_t* internal = (dmenv_ctx_internal_t*)ctx;
+    env_entry_t* current = internal->head;
     while (current != NULL) {
         if (strncmp(current->name, prefix, prefix_len) == 0) {
             callback(current->name, current->value, user_data);
@@ -217,10 +307,10 @@ DMOD_INPUT_API_DECLARATION( dmenv, 1.0, size_t, _find, ( const char* prefix, voi
     return count;
 }
 
-DMOD_INPUT_API_DECLARATION( dmenv, 1.0, bool, _remove, ( const char* name ) )
+DMOD_INPUT_API_DECLARATION( dmenv, 1.0, bool, _remove, ( dmenv_ctx_t ctx, const char* name ) )
 {
-    if (!g_dmenv_context.initialized) {
-        DMOD_LOG_ERROR("Environment manager not initialized");
+    if (!ctx) {
+        DMOD_LOG_ERROR("Invalid context");
         return false;
     }
     
@@ -231,7 +321,8 @@ DMOD_INPUT_API_DECLARATION( dmenv, 1.0, bool, _remove, ( const char* name ) )
     
     Dmod_EnterCritical();
     
-    env_entry_t* current = g_dmenv_context.head;
+    dmenv_ctx_internal_t* internal = (dmenv_ctx_internal_t*)ctx;
+    env_entry_t* current = internal->head;
     env_entry_t* prev = NULL;
     
     while (current != NULL) {
@@ -239,13 +330,17 @@ DMOD_INPUT_API_DECLARATION( dmenv, 1.0, bool, _remove, ( const char* name ) )
             // Found the entry to remove
             if (prev == NULL) {
                 // Removing the head
-                g_dmenv_context.head = current->next;
+                internal->head = current->next;
             } else {
                 // Removing from middle or end
                 prev->next = current->next;
             }
             
-            g_dmenv_context.entry_count--;
+            Dmod_FreeEx(current->name, false);
+            Dmod_FreeEx(current->value, false);
+            Dmod_FreeEx(current, false);
+            
+            internal->entry_count--;
             
             DMOD_LOG_INFO("Removed variable %s", name);
             
@@ -262,18 +357,29 @@ DMOD_INPUT_API_DECLARATION( dmenv, 1.0, bool, _remove, ( const char* name ) )
     return false;
 }
 
-DMOD_INPUT_API_DECLARATION( dmenv, 1.0, bool, _clear, ( void ) )
+DMOD_INPUT_API_DECLARATION( dmenv, 1.0, bool, _clear, ( dmenv_ctx_t ctx ) )
 {
-    if (!g_dmenv_context.initialized) {
-        DMOD_LOG_ERROR("Environment manager not initialized");
+    if (!ctx) {
+        DMOD_LOG_ERROR("Invalid context");
         return false;
     }
     
     Dmod_EnterCritical();
     
-    g_dmenv_context.head = NULL;
-    g_dmenv_context.entry_count = 0;
-    g_dmenv_context.used_size = 0;
+    dmenv_ctx_internal_t* internal = (dmenv_ctx_internal_t*)ctx;
+    
+    // Free all entries
+    env_entry_t* current = internal->head;
+    while (current != NULL) {
+        env_entry_t* next = current->next;
+        Dmod_FreeEx(current->name, false);
+        Dmod_FreeEx(current->value, false);
+        Dmod_FreeEx(current, false);
+        current = next;
+    }
+    
+    internal->head = NULL;
+    internal->entry_count = 0;
     
     DMOD_LOG_INFO("Cleared all environment variables");
     
@@ -282,14 +388,15 @@ DMOD_INPUT_API_DECLARATION( dmenv, 1.0, bool, _clear, ( void ) )
     return true;
 }
 
-DMOD_INPUT_API_DECLARATION( dmenv, 1.0, size_t, _count, ( void ) )
+DMOD_INPUT_API_DECLARATION( dmenv, 1.0, size_t, _count, ( dmenv_ctx_t ctx ) )
 {
-    if (!g_dmenv_context.initialized) {
+    if (!ctx) {
         return 0;
     }
     
     Dmod_EnterCritical();
-    size_t count = g_dmenv_context.entry_count;
+    dmenv_ctx_internal_t* internal = (dmenv_ctx_internal_t*)ctx;
+    size_t count = internal->entry_count;
     Dmod_ExitCritical();
     
     return count;

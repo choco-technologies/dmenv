@@ -4,78 +4,163 @@
 #include "dmod.h"
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdint.h>
 
 /**
- * @brief Initialize the environment variables manager with a buffer.
- * 
- * @param buffer Pointer to the memory buffer to be used for environment variables.
- * @param size   Size of the memory buffer.
- * 
- * @return true if initialization is successful, false otherwise.
+ * @brief Opaque context type for environment variables manager
  */
-DMOD_BUILTIN_API( dmenv, 1.0, bool             , _init, ( void* buffer, size_t size ) );
+typedef struct dmenv_ctx* dmenv_ctx_t;
 
 /**
- * @brief Check if the environment variables manager is initialized.
+ * @brief Callback function type for dmenv_find operation
  * 
- * @return true if initialized, false otherwise.
+ * This callback is invoked for each environment variable that matches the
+ * search prefix. The callback is executed while holding an internal lock,
+ * so it should not call other dmenv functions and should complete quickly.
+ * 
+ * @param name      Name of the matched environment variable
+ * @param value     Value of the matched environment variable
+ * @param user_data User-provided data pointer passed to dmenv_find
  */
-DMOD_BUILTIN_API( dmenv, 1.0, bool             , _is_initialized, ( void ) );
+typedef void (*dmenv_find_callback_t)(const char* name, const char* value, void* user_data);
 
 /**
- * @brief Set an environment variable.
+ * @brief Create a new environment variables context
  * 
- * @param name  Name of the environment variable.
- * @param value Value to set for the environment variable.
+ * @param parent Optional parent context for variable inheritance. If a variable
+ *               is not found in the current context, it will be searched in the
+ *               parent context. Pass NULL for no inheritance.
  * 
- * @return true if the variable was set successfully, false otherwise.
+ * @return Pointer to the created context, or NULL on failure
  */
-DMOD_BUILTIN_API( dmenv, 1.0, bool             , _set, ( const char* name, const char* value ) );
+DMOD_BUILTIN_API( dmenv, 1.0, dmenv_ctx_t, _create, ( dmenv_ctx_t parent ) );
 
 /**
- * @brief Get an environment variable value.
+ * @brief Destroy an environment variables context
  * 
- * @param name Name of the environment variable.
- * 
- * @return Pointer to the value string, or NULL if not found.
+ * @param ctx Context to destroy
  */
-DMOD_BUILTIN_API( dmenv, 1.0, const char*      , _get, ( const char* name ) );
+DMOD_BUILTIN_API( dmenv, 1.0, void, _destroy, ( dmenv_ctx_t ctx ) );
 
 /**
- * @brief Find environment variables matching a prefix.
+ * @brief Check if a context is valid
  * 
- * @param prefix    Prefix to match against variable names.
- * @param callback  Callback function to call for each matching variable.
- *                  WARNING: The callback is executed while holding the internal
- *                  lock. Do not call other dmenv functions from within the callback
- *                  as this will cause a deadlock. Keep callback execution short.
- * @param user_data User data to pass to the callback.
- * 
- * @return Number of matching variables found.
+ * @param ctx Context to check
+ * @return true if valid, false otherwise
  */
-DMOD_BUILTIN_API( dmenv, 1.0, size_t           , _find, ( const char* prefix, void (*callback)(const char* name, const char* value, void* user_data), void* user_data ) );
+DMOD_BUILTIN_API( dmenv, 1.0, bool, _is_valid, ( dmenv_ctx_t ctx ) );
 
 /**
- * @brief Remove an environment variable.
+ * @brief Set the default context
  * 
- * @param name Name of the environment variable to remove.
- * 
- * @return true if the variable was removed successfully, false if not found.
+ * @param ctx Context to set as default
  */
-DMOD_BUILTIN_API( dmenv, 1.0, bool             , _remove, ( const char* name ) );
+DMOD_BUILTIN_API( dmenv, 1.0, void, _set_as_default, ( dmenv_ctx_t ctx ) );
 
 /**
- * @brief Clear all environment variables.
+ * @brief Get the default context
  * 
- * @return true if all variables were cleared successfully, false otherwise.
+ * @return Pointer to the default context, or NULL if not set
  */
-DMOD_BUILTIN_API( dmenv, 1.0, bool             , _clear, ( void ) );
+DMOD_BUILTIN_API( dmenv, 1.0, dmenv_ctx_t, _get_default, ( void ) );
 
 /**
- * @brief Get the number of environment variables currently stored.
+ * @brief Set an environment variable (string value)
  * 
- * @return Number of environment variables.
+ * @param ctx   Context to set the variable in
+ * @param name  Name of the environment variable
+ * @param value Value to set for the environment variable
+ * 
+ * @return true if the variable was set successfully, false otherwise
  */
-DMOD_BUILTIN_API( dmenv, 1.0, size_t           , _count, ( void ) );
+DMOD_BUILTIN_API( dmenv, 1.0, bool, _set, ( dmenv_ctx_t ctx, const char* name, const char* value ) );
+
+/**
+ * @brief Get an environment variable value (string)
+ * 
+ * If the variable is not found in the context and the context has a parent,
+ * the parent will be searched recursively.
+ * 
+ * @param ctx  Context to get the variable from
+ * @param name Name of the environment variable
+ * 
+ * @return Pointer to the value string, or NULL if not found
+ */
+DMOD_BUILTIN_API( dmenv, 1.0, const char*, _get, ( dmenv_ctx_t ctx, const char* name ) );
+
+/**
+ * @brief Set an environment variable (unsigned integer value in hex)
+ * 
+ * The value is stored internally as a hexadecimal string (e.g., "0x2000").
+ * 
+ * @param ctx   Context to set the variable in
+ * @param name  Name of the environment variable
+ * @param value Unsigned integer value to set
+ * 
+ * @return true if the variable was set successfully, false otherwise
+ */
+DMOD_BUILTIN_API( dmenv, 1.0, bool, _seti, ( dmenv_ctx_t ctx, const char* name, uint32_t value ) );
+
+/**
+ * @brief Get an environment variable value (unsigned integer)
+ * 
+ * Parses the value as a hexadecimal or decimal number. If the variable is not
+ * found in the context and the context has a parent, the parent will be searched.
+ * 
+ * @param ctx  Context to get the variable from
+ * @param name Name of the environment variable
+ * @param out_value Pointer to store the parsed value
+ * 
+ * @return true if the variable was found and parsed successfully, false otherwise
+ */
+DMOD_BUILTIN_API( dmenv, 1.0, bool, _geti, ( dmenv_ctx_t ctx, const char* name, uint32_t* out_value ) );
+
+/**
+ * @brief Find environment variables matching a prefix
+ * 
+ * Only searches in the current context, not in parent contexts.
+ * 
+ * @param ctx       Context to search in
+ * @param prefix    Prefix to match against variable names
+ * @param callback  Callback function to call for each matching variable
+ * @param user_data User data to pass to the callback
+ * 
+ * @return Number of matching variables found
+ */
+DMOD_BUILTIN_API( dmenv, 1.0, size_t, _find, ( dmenv_ctx_t ctx, const char* prefix, dmenv_find_callback_t callback, void* user_data ) );
+
+/**
+ * @brief Remove an environment variable
+ * 
+ * Only removes from the current context, not from parent contexts.
+ * 
+ * @param ctx  Context to remove the variable from
+ * @param name Name of the environment variable to remove
+ * 
+ * @return true if the variable was removed successfully, false if not found
+ */
+DMOD_BUILTIN_API( dmenv, 1.0, bool, _remove, ( dmenv_ctx_t ctx, const char* name ) );
+
+/**
+ * @brief Clear all environment variables in a context
+ * 
+ * Only clears variables in the current context, not in parent contexts.
+ * 
+ * @param ctx Context to clear
+ * 
+ * @return true if all variables were cleared successfully, false otherwise
+ */
+DMOD_BUILTIN_API( dmenv, 1.0, bool, _clear, ( dmenv_ctx_t ctx ) );
+
+/**
+ * @brief Get the number of environment variables in a context
+ * 
+ * Only counts variables in the current context, not in parent contexts.
+ * 
+ * @param ctx Context to count variables in
+ * 
+ * @return Number of environment variables
+ */
+DMOD_BUILTIN_API( dmenv, 1.0, size_t, _count, ( dmenv_ctx_t ctx ) );
 
 #endif // DMENV_H
