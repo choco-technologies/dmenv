@@ -19,7 +19,7 @@ A lightweight environment variables manager designed specifically for the **DMOD
 
 ## Overview
 
-dmenv is a custom environment variables manager that integrates seamlessly with the DMOD dynamic module system. It provides a static-buffer-based solution for storing and retrieving configuration parameters, making it ideal for embedded systems where dynamic memory allocation may be limited or undesirable.
+dmenv is a custom environment variables manager that integrates seamlessly with the DMOD dynamic module system. It provides a context-based solution for storing and retrieving configuration parameters, making it ideal for embedded systems where flexibility and modularity are important. With support for context inheritance, multiple isolated environments can be managed efficiently.
 
 ## What is DMOD?
 
@@ -38,22 +38,27 @@ DMOD provides a modular architecture that makes embedded systems more flexible, 
 **dmenv** is an environment variables manager specifically designed to work with DMOD. It provides:
 
 - **Simple key-value storage**: Store configuration parameters as name-value pairs
-- **Static buffer management**: Operates on a pre-allocated buffer (no reliance on system malloc)
+- **Context-based management**: Create multiple isolated environment contexts
+- **Context inheritance**: Child contexts can inherit variables from parent contexts
 - **Thread-safe operations**: Uses DMOD's critical section mechanisms
 - **Prefix-based search**: Find all variables matching a specific prefix
 - **Efficient lookup**: Fast variable retrieval using linked list structure
+- **Integer support**: Set and get variables as unsigned integers (hex or decimal)
 - **Module integration**: Seamless integration with DMOD logging and error handling
 
 dmenv is ideal for storing application configuration, runtime parameters, and inter-module communication data in embedded DMOD-based systems.
 
 ## Features
 
+- ✅ **Context-based management**: Create multiple isolated environment contexts
+- ✅ **Context inheritance**: Child contexts can inherit variables from parent contexts
 - ✅ **Key-value storage**: Store and retrieve environment variables by name
 - ✅ **Variable update**: Update existing variables without creating duplicates
 - ✅ **Variable removal**: Remove individual variables or clear all at once
 - ✅ **Prefix search**: Find all variables matching a given prefix
 - ✅ **Variable counting**: Track the number of stored variables
-- ✅ **Static buffer operation**: No dependency on system malloc/free
+- ✅ **Integer support**: Set and get variables as unsigned integers (hex or decimal)
+- ✅ **Dynamic allocation**: Uses DMOD's memory management system
 - ✅ **Thread-safe**: Uses DMOD critical sections for synchronization
 - ✅ **Comprehensive logging**: Integration with DMOD logging system
 - ✅ **Zero external dependencies**: Only requires DMOD framework
@@ -120,24 +125,31 @@ dmenv includes comprehensive test suites:
 ### Test Suites
 
 1. **test_minimal**: Minimal smoke tests
-   - Initialization
+   - Context creation and destruction
    - Basic set/get operations
    - Count and remove operations
+   - Integer operations
 
 2. **test_simple**: Simple functional tests
    - Set and get variables
    - Remove variables
    - Clear all variables
    - Find variables by prefix
+   - Integer operations
+   - Context inheritance
 
 3. **test_dmenv_unit**: Comprehensive unit tests using Unity framework
-   - Initialization with various conditions
+   - Context creation and validation
    - Set/get operations
    - Update existing variables
    - Remove operations
    - Clear all variables
    - Count operations
    - Find operations with prefixes
+   - Integer operations (seti/geti)
+   - Context inheritance
+   - Context override behavior
+   - Default context management
    - Multiple variable stress tests
 
 ### Running Tests
@@ -164,28 +176,27 @@ ctest --verbose
 #include "dmenv.h"
 #include <string.h>
 
-// 1. Define your buffer
-#define ENV_BUFFER_SIZE (8 * 1024)  // 8KB
-static char env_buffer[ENV_BUFFER_SIZE];
-
 int main(void) {
-    // 2. Initialize the environment manager
-    bool success = dmenv_init(env_buffer, ENV_BUFFER_SIZE);
-    if (!success) {
-        // Handle initialization failure
+    // 1. Create an environment context
+    dmenv_ctx_t ctx = dmenv_create(NULL);
+    if (ctx == NULL) {
+        // Handle creation failure
         return -1;
     }
     
-    // 3. Set environment variables
-    dmenv_set("APP_NAME", "MyApplication");
-    dmenv_set("APP_VERSION", "1.0.0");
-    dmenv_set("DEBUG_MODE", "true");
+    // 2. Set environment variables
+    dmenv_set(ctx, "APP_NAME", "MyApplication");
+    dmenv_set(ctx, "APP_VERSION", "1.0.0");
+    dmenv_set(ctx, "DEBUG_MODE", "true");
     
-    // 4. Get environment variables
-    const char* app_name = dmenv_get("APP_NAME");
+    // 3. Get environment variables
+    const char* app_name = dmenv_get(ctx, "APP_NAME");
     if (app_name != NULL) {
         printf("Application: %s\n", app_name);
     }
+    
+    // 4. Clean up
+    dmenv_destroy(ctx);
     
     return 0;
 }
@@ -197,15 +208,19 @@ int main(void) {
 #include "dmenv.h"
 
 void config_example(void) {
+    dmenv_ctx_t ctx = dmenv_create(NULL);
+    
     // Set initial value
-    dmenv_set("LOG_LEVEL", "INFO");
+    dmenv_set(ctx, "LOG_LEVEL", "INFO");
     
     // Update the value (no duplicate created)
-    dmenv_set("LOG_LEVEL", "DEBUG");
+    dmenv_set(ctx, "LOG_LEVEL", "DEBUG");
     
     // Get updated value
-    const char* level = dmenv_get("LOG_LEVEL");
+    const char* level = dmenv_get(ctx, "LOG_LEVEL");
     // level now contains "DEBUG"
+    
+    dmenv_destroy(ctx);
 }
 ```
 
@@ -215,18 +230,22 @@ void config_example(void) {
 #include "dmenv.h"
 
 void cleanup_example(void) {
+    dmenv_ctx_t ctx = dmenv_create(NULL);
+    
     // Set a temporary variable
-    dmenv_set("TEMP_DATA", "temporary_value");
+    dmenv_set(ctx, "TEMP_DATA", "temporary_value");
     
     // Remove it when done
-    bool removed = dmenv_remove("TEMP_DATA");
+    bool removed = dmenv_remove(ctx, "TEMP_DATA");
     if (removed) {
         printf("Temporary data removed\n");
     }
     
     // Variable no longer exists
-    const char* value = dmenv_get("TEMP_DATA");
+    const char* value = dmenv_get(ctx, "TEMP_DATA");
     // value is NULL
+    
+    dmenv_destroy(ctx);
 }
 ```
 
@@ -240,16 +259,20 @@ void print_var(const char* name, const char* value, void* user_data) {
 }
 
 void find_example(void) {
+    dmenv_ctx_t ctx = dmenv_create(NULL);
+    
     // Set related variables with common prefix
-    dmenv_set("DB_HOST", "localhost");
-    dmenv_set("DB_PORT", "5432");
-    dmenv_set("DB_NAME", "mydb");
-    dmenv_set("APP_NAME", "myapp");
+    dmenv_set(ctx, "DB_HOST", "localhost");
+    dmenv_set(ctx, "DB_PORT", "5432");
+    dmenv_set(ctx, "DB_NAME", "mydb");
+    dmenv_set(ctx, "APP_NAME", "myapp");
     
     // Find all database-related variables
     printf("Database configuration:\n");
-    size_t found = dmenv_find("DB_", print_var, NULL);
+    size_t found = dmenv_find(ctx, "DB_", print_var, NULL);
     printf("Found %zu database variables\n", found);
+    
+    dmenv_destroy(ctx);
 }
 ```
 
@@ -259,12 +282,16 @@ void find_example(void) {
 #include "dmenv.h"
 
 void reset_example(void) {
+    dmenv_ctx_t ctx = dmenv_create(NULL);
+    
     // Clear all environment variables
-    dmenv_clear();
+    dmenv_clear(ctx);
     
     // Verify count is 0
-    size_t count = dmenv_count();
+    size_t count = dmenv_count(ctx);
     printf("Variables remaining: %zu\n", count);  // Prints: 0
+    
+    dmenv_destroy(ctx);
 }
 ```
 
@@ -275,18 +302,15 @@ void reset_example(void) {
 #include "dmod.h"
 #include <stdio.h>
 
-#define ENV_SIZE (16 * 1024)
-static char env_buffer[ENV_SIZE];
-
-void load_configuration(void) {
+void load_configuration(dmenv_ctx_t ctx) {
     // Load configuration from persistent storage or hardcode
-    dmenv_set("SYSTEM_NAME", "EmbeddedDevice");
-    dmenv_set("FIRMWARE_VERSION", "2.1.3");
-    dmenv_set("NETWORK_ENABLED", "true");
-    dmenv_set("NETWORK_IP", "192.168.1.100");
-    dmenv_set("NETWORK_PORT", "8080");
-    dmenv_set("SENSOR_SAMPLE_RATE", "1000");
-    dmenv_set("SENSOR_THRESHOLD", "75.5");
+    dmenv_set(ctx, "SYSTEM_NAME", "EmbeddedDevice");
+    dmenv_set(ctx, "FIRMWARE_VERSION", "2.1.3");
+    dmenv_set(ctx, "NETWORK_ENABLED", "true");
+    dmenv_set(ctx, "NETWORK_IP", "192.168.1.100");
+    dmenv_set(ctx, "NETWORK_PORT", "8080");
+    dmenv_set(ctx, "SENSOR_SAMPLE_RATE", "1000");
+    dmenv_set(ctx, "SENSOR_THRESHOLD", "75.5");
 }
 
 void print_all_network_settings(const char* name, const char* value, void* user_data) {
@@ -296,28 +320,32 @@ void print_all_network_settings(const char* name, const char* value, void* user_
 int main(void) {
     printf("=== Embedded System Configuration ===\n\n");
     
-    // Initialize environment manager
-    if (!dmenv_init(env_buffer, ENV_SIZE)) {
-        printf("ERROR: Failed to initialize environment manager\n");
+    // Create environment context
+    dmenv_ctx_t ctx = dmenv_create(NULL);
+    if (ctx == NULL) {
+        printf("ERROR: Failed to create environment context\n");
         return -1;
     }
     
     // Load configuration
-    load_configuration();
+    load_configuration(ctx);
     
-    printf("Configuration loaded: %zu variables\n\n", dmenv_count());
+    printf("Configuration loaded: %zu variables\n\n", dmenv_count(ctx));
     
     // Display system info
-    printf("System: %s\n", dmenv_get("SYSTEM_NAME"));
-    printf("Firmware: %s\n\n", dmenv_get("FIRMWARE_VERSION"));
+    printf("System: %s\n", dmenv_get(ctx, "SYSTEM_NAME"));
+    printf("Firmware: %s\n\n", dmenv_get(ctx, "FIRMWARE_VERSION"));
     
     // Display network settings
     printf("Network Configuration:\n");
-    dmenv_find("NETWORK_", print_all_network_settings, NULL);
+    dmenv_find(ctx, "NETWORK_", print_all_network_settings, NULL);
     
     // Display sensor settings
     printf("\nSensor Configuration:\n");
-    dmenv_find("SENSOR_", print_all_network_settings, NULL);
+    dmenv_find(ctx, "SENSOR_", print_all_network_settings, NULL);
+    
+    // Clean up
+    dmenv_destroy(ctx);
     
     return 0;
 }
@@ -325,31 +353,67 @@ int main(void) {
 
 ## API Reference
 
-### Initialization
+### Context Management
 
-#### `dmenv_init`
+#### `dmenv_create`
 
 ```c
-bool dmenv_init(void* buffer, size_t size);
+dmenv_ctx_t dmenv_create(dmenv_ctx_t parent);
 ```
 
-Initialize the environment variables manager with a buffer.
+Create a new environment variables context.
 
 - **Parameters:**
-  - `buffer`: Pointer to the memory buffer to be used for storage
-  - `size`: Size of the memory buffer in bytes
-- **Returns:** `true` if initialization is successful, `false` otherwise
+  - `parent`: Optional parent context for variable inheritance. If a variable is not found in the current context, it will be searched in the parent context. Pass NULL for no inheritance.
+- **Returns:** Pointer to the created context, or NULL on failure
 - **Thread-safe:** Yes
 
-#### `dmenv_is_initialized`
+#### `dmenv_destroy`
 
 ```c
-bool dmenv_is_initialized(void);
+void dmenv_destroy(dmenv_ctx_t ctx);
 ```
 
-Check if the environment variables manager is initialized.
+Destroy an environment variables context.
 
-- **Returns:** `true` if initialized, `false` otherwise
+- **Parameters:**
+  - `ctx`: Context to destroy
+- **Thread-safe:** Yes
+
+#### `dmenv_is_valid`
+
+```c
+bool dmenv_is_valid(dmenv_ctx_t ctx);
+```
+
+Check if a context is valid.
+
+- **Parameters:**
+  - `ctx`: Context to check
+- **Returns:** `true` if valid, `false` otherwise
+- **Thread-safe:** Yes
+
+#### `dmenv_set_as_default`
+
+```c
+void dmenv_set_as_default(dmenv_ctx_t ctx);
+```
+
+Set the default context.
+
+- **Parameters:**
+  - `ctx`: Context to set as default
+- **Thread-safe:** Yes
+
+#### `dmenv_get_default`
+
+```c
+dmenv_ctx_t dmenv_get_default(void);
+```
+
+Get the default context.
+
+- **Returns:** Pointer to the default context, or NULL if not set
 - **Thread-safe:** Yes
 
 ### Variable Operations
@@ -357,40 +421,73 @@ Check if the environment variables manager is initialized.
 #### `dmenv_set`
 
 ```c
-bool dmenv_set(const char* name, const char* value);
+bool dmenv_set(dmenv_ctx_t ctx, const char* name, const char* value);
 ```
 
 Set an environment variable. If the variable already exists, its value is updated.
 
 - **Parameters:**
-  - `name`: Name of the environment variable (max 63 characters)
-  - `value`: Value to set (max 255 characters)
+  - `ctx`: Context to set the variable in
+  - `name`: Name of the environment variable
+  - `value`: Value to set
 - **Returns:** `true` if the variable was set successfully, `false` otherwise
 - **Thread-safe:** Yes
 
 #### `dmenv_get`
 
 ```c
-const char* dmenv_get(const char* name);
+const char* dmenv_get(dmenv_ctx_t ctx, const char* name);
 ```
 
-Get an environment variable value.
+Get an environment variable value. If the variable is not found in the context and the context has a parent, the parent will be searched recursively.
 
 - **Parameters:**
+  - `ctx`: Context to get the variable from
   - `name`: Name of the environment variable
 - **Returns:** Pointer to the value string, or NULL if not found
 - **Thread-safe:** Yes
 - **Note:** The returned pointer is valid until the variable is removed or modified
 
+#### `dmenv_seti`
+
+```c
+bool dmenv_seti(dmenv_ctx_t ctx, const char* name, uint32_t value);
+```
+
+Set an environment variable (unsigned integer value in hex). The value is stored internally as a hexadecimal string (e.g., "0x2000").
+
+- **Parameters:**
+  - `ctx`: Context to set the variable in
+  - `name`: Name of the environment variable
+  - `value`: Unsigned integer value to set
+- **Returns:** `true` if the variable was set successfully, `false` otherwise
+- **Thread-safe:** Yes
+
+#### `dmenv_geti`
+
+```c
+bool dmenv_geti(dmenv_ctx_t ctx, const char* name, uint32_t* out_value);
+```
+
+Get an environment variable value (unsigned integer). Parses the value as a hexadecimal or decimal number. If the variable is not found in the context and the context has a parent, the parent will be searched.
+
+- **Parameters:**
+  - `ctx`: Context to get the variable from
+  - `name`: Name of the environment variable
+  - `out_value`: Pointer to store the parsed value
+- **Returns:** `true` if the variable was found and parsed successfully, `false` otherwise
+- **Thread-safe:** Yes
+
 #### `dmenv_remove`
 
 ```c
-bool dmenv_remove(const char* name);
+bool dmenv_remove(dmenv_ctx_t ctx, const char* name);
 ```
 
-Remove an environment variable.
+Remove an environment variable. Only removes from the current context, not from parent contexts.
 
 - **Parameters:**
+  - `ctx`: Context to remove the variable from
   - `name`: Name of the environment variable to remove
 - **Returns:** `true` if the variable was removed successfully, `false` if not found
 - **Thread-safe:** Yes
@@ -398,11 +495,13 @@ Remove an environment variable.
 #### `dmenv_clear`
 
 ```c
-bool dmenv_clear(void);
+bool dmenv_clear(dmenv_ctx_t ctx);
 ```
 
-Clear all environment variables.
+Clear all environment variables in a context. Only clears variables in the current context, not in parent contexts.
 
+- **Parameters:**
+  - `ctx`: Context to clear
 - **Returns:** `true` if all variables were cleared successfully, `false` otherwise
 - **Thread-safe:** Yes
 
@@ -411,14 +510,15 @@ Clear all environment variables.
 #### `dmenv_find`
 
 ```c
-size_t dmenv_find(const char* prefix, 
+size_t dmenv_find(dmenv_ctx_t ctx, const char* prefix, 
                   void (*callback)(const char* name, const char* value, void* user_data), 
                   void* user_data);
 ```
 
-Find environment variables matching a prefix.
+Find environment variables matching a prefix. Only searches in the current context, not in parent contexts.
 
 - **Parameters:**
+  - `ctx`: Context to search in
   - `prefix`: Prefix to match against variable names
   - `callback`: Callback function to call for each matching variable
   - `user_data`: User data to pass to the callback
@@ -428,11 +528,13 @@ Find environment variables matching a prefix.
 #### `dmenv_count`
 
 ```c
-size_t dmenv_count(void);
+size_t dmenv_count(dmenv_ctx_t ctx);
 ```
 
-Get the number of environment variables currently stored.
+Get the number of environment variables in a context. Only counts variables in the current context, not in parent contexts.
 
+- **Parameters:**
+  - `ctx`: Context to count variables in
 - **Returns:** Number of environment variables
 - **Thread-safe:** Yes
 
