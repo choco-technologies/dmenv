@@ -3,6 +3,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#ifndef DMENV_MAGIC_NUMBER
+#define DMENV_MAGIC_NUMBER 0x444D454E  // "DMEN" in hex
+#endif
+
 /**
  * @brief Structure to hold an environment variable entry
  */
@@ -16,6 +20,7 @@ typedef struct env_entry {
  * @brief Context structure for the environment variables manager
  */
 typedef struct dmenv_ctx {
+    uint32_t magic;
     env_entry_t* head;
     dmenv_ctx_t parent;
     size_t entry_count;
@@ -78,6 +83,7 @@ DMOD_INPUT_API_DECLARATION( dmenv, 1.0, dmenv_ctx_t, _create, ( dmenv_ctx_t pare
         return NULL;
     }
     
+    ctx->magic = DMENV_MAGIC_NUMBER;
     ctx->head = NULL;
     ctx->parent = parent;
     ctx->entry_count = 0;
@@ -92,7 +98,7 @@ DMOD_INPUT_API_DECLARATION( dmenv, 1.0, dmenv_ctx_t, _create, ( dmenv_ctx_t pare
 
 DMOD_INPUT_API_DECLARATION( dmenv, 1.0, void, _destroy, ( dmenv_ctx_t ctx ) )
 {
-    if (!ctx) {
+    if (!dmenv_is_valid(ctx)) {
         return;
     }
     
@@ -115,6 +121,9 @@ DMOD_INPUT_API_DECLARATION( dmenv, 1.0, void, _destroy, ( dmenv_ctx_t ctx ) )
         g_default_context = NULL;
     }
     
+    // Invalidate magic number
+    internal->magic = 0;
+    
     Dmod_FreeEx(ctx, false);
     
     DMOD_LOG_INFO("Destroyed context %p", ctx);
@@ -124,11 +133,19 @@ DMOD_INPUT_API_DECLARATION( dmenv, 1.0, void, _destroy, ( dmenv_ctx_t ctx ) )
 
 DMOD_INPUT_API_DECLARATION( dmenv, 1.0, bool, _is_valid, ( dmenv_ctx_t ctx ) )
 {
-    return ctx != NULL;
+    Dmod_EnterCritical();
+    bool result = ctx != NULL && ((dmenv_ctx_internal_t*)ctx)->magic == DMENV_MAGIC_NUMBER;
+    Dmod_ExitCritical();
+    return result;
 }
 
 DMOD_INPUT_API_DECLARATION( dmenv, 1.0, void, _set_as_default, ( dmenv_ctx_t ctx ) )
 {
+    if (!dmenv_is_valid(ctx)) {
+        DMOD_LOG_ERROR("Invalid context");
+        return;
+    }
+    
     Dmod_EnterCritical();
     g_default_context = ctx;
     DMOD_LOG_INFO("Set context %p as default", ctx);
@@ -142,7 +159,7 @@ DMOD_INPUT_API_DECLARATION( dmenv, 1.0, dmenv_ctx_t, _get_default, ( void ) )
 
 DMOD_INPUT_API_DECLARATION( dmenv, 1.0, bool, _set, ( dmenv_ctx_t ctx, const char* name, const char* value ) )
 {
-    if (!ctx) {
+    if (!dmenv_is_valid(ctx)) {
         DMOD_LOG_ERROR("Invalid context");
         return false;
     }
@@ -216,7 +233,7 @@ DMOD_INPUT_API_DECLARATION( dmenv, 1.0, bool, _set, ( dmenv_ctx_t ctx, const cha
 
 DMOD_INPUT_API_DECLARATION( dmenv, 1.0, const char*, _get, ( dmenv_ctx_t ctx, const char* name ) )
 {
-    if (!ctx) {
+    if (!dmenv_is_valid(ctx)) {
         DMOD_LOG_ERROR("Invalid context");
         return NULL;
     }
@@ -244,7 +261,7 @@ DMOD_INPUT_API_DECLARATION( dmenv, 1.0, const char*, _get, ( dmenv_ctx_t ctx, co
 DMOD_INPUT_API_DECLARATION( dmenv, 1.0, bool, _seti, ( dmenv_ctx_t ctx, const char* name, uint32_t value ) )
 {
     char buffer[32];
-    snprintf(buffer, sizeof(buffer), "0x%X", value);
+    Dmod_SnPrintf(buffer, sizeof(buffer), "0x%X", value);
     return dmenv_set(ctx, name, buffer);
 }
 
@@ -275,7 +292,7 @@ DMOD_INPUT_API_DECLARATION( dmenv, 1.0, bool, _geti, ( dmenv_ctx_t ctx, const ch
 
 DMOD_INPUT_API_DECLARATION( dmenv, 1.0, size_t, _find, ( dmenv_ctx_t ctx, const char* prefix, dmenv_find_callback_t callback, void* user_data ) )
 {
-    if (!ctx) {
+    if (!dmenv_is_valid(ctx)) {
         DMOD_LOG_ERROR("Invalid context");
         return 0;
     }
@@ -309,7 +326,7 @@ DMOD_INPUT_API_DECLARATION( dmenv, 1.0, size_t, _find, ( dmenv_ctx_t ctx, const 
 
 DMOD_INPUT_API_DECLARATION( dmenv, 1.0, bool, _remove, ( dmenv_ctx_t ctx, const char* name ) )
 {
-    if (!ctx) {
+    if (!dmenv_is_valid(ctx)) {
         DMOD_LOG_ERROR("Invalid context");
         return false;
     }
@@ -359,7 +376,7 @@ DMOD_INPUT_API_DECLARATION( dmenv, 1.0, bool, _remove, ( dmenv_ctx_t ctx, const 
 
 DMOD_INPUT_API_DECLARATION( dmenv, 1.0, bool, _clear, ( dmenv_ctx_t ctx ) )
 {
-    if (!ctx) {
+    if (!dmenv_is_valid(ctx)) {
         DMOD_LOG_ERROR("Invalid context");
         return false;
     }
@@ -390,7 +407,7 @@ DMOD_INPUT_API_DECLARATION( dmenv, 1.0, bool, _clear, ( dmenv_ctx_t ctx ) )
 
 DMOD_INPUT_API_DECLARATION( dmenv, 1.0, size_t, _count, ( dmenv_ctx_t ctx ) )
 {
-    if (!ctx) {
+    if (!dmenv_is_valid(ctx)) {
         return 0;
     }
     
@@ -401,3 +418,38 @@ DMOD_INPUT_API_DECLARATION( dmenv, 1.0, size_t, _count, ( dmenv_ctx_t ctx ) )
     
     return count;
 }
+
+#ifndef DMENV_DONT_IMPLEMENT_DMOD_API
+/**
+ * @brief Set an environment variable in the default context (DMOD API)
+ * 
+ * @param Name Name of the environment variable
+ * @param Value Value to set
+ * @return bool true if successful, false otherwise
+ */
+DMOD_INPUT_API_DECLARATION( Dmod, 1.0, bool, _SetEnv, ( const char* Name, const char* Value ) )
+{
+    dmenv_ctx_t ctx = dmenv_get_default();
+    if (ctx == NULL) {
+        DMOD_LOG_ERROR("No default context set for Dmod_SetEnv");
+        return false;
+    }
+    return dmenv_set(ctx, Name, Value);
+}
+
+/**
+ * @brief Get an environment variable from the default context (DMOD API)
+ * 
+ * @param Name Name of the environment variable
+ * @return const char* Value if found, NULL otherwise
+ */
+DMOD_INPUT_API_DECLARATION( Dmod, 1.0, const char*, _GetEnv, ( const char* Name ) )
+{
+    dmenv_ctx_t ctx = dmenv_get_default();
+    if (ctx == NULL) {
+        DMOD_LOG_ERROR("No default context set for Dmod_GetEnv");
+        return NULL;
+    }
+    return dmenv_get(ctx, Name);
+}
+#endif // DMENV_DONT_IMPLEMENT_DMOD_API
