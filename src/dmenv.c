@@ -467,17 +467,32 @@ DMOD_INPUT_API_DECLARATION(dmenv, 1.0, size_t, _count, (dmenv_ctx_t ctx))
  *
  * @param Name Name of the environment variable
  * @param Value Value to set
- * @return bool true if successful, false otherwise
+ * @param Overwrite If non-zero, overwrite existing variable; if zero, keep existing value
+ * @return int 0 if successful, non-zero otherwise
  */
-DMOD_INPUT_API_DECLARATION(Dmod, 1.0, bool, _SetEnv, (const char *Name, const char *Value))
+DMOD_INPUT_API_DECLARATION(Dmod, 1.0, int, _SetEnv, (const char *Name, const char *Value, int Overwrite))
 {
     dmenv_ctx_t ctx = dmenv_get_default();
     if (ctx == NULL)
     {
         DMOD_LOG_ERROR("No default context set for Dmod_SetEnv\n");
-        return false;
+        return -1;
     }
-    return dmenv_set(ctx, Name, Value);
+    
+    // If Overwrite is 0 and variable already exists, return success without updating
+    if (Overwrite == 0)
+    {
+        const char *existing = dmenv_get(ctx, Name);
+        if (existing != NULL)
+        {
+            DMOD_LOG_VERBOSE("Variable %s already exists, not overwriting\n", Name);
+            return 0;
+        }
+    }
+    
+    // Set or update the variable
+    bool result = dmenv_set(ctx, Name, Value);
+    return result ? 0 : -1;
 }
 
 /**
