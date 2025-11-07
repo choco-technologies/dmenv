@@ -46,6 +46,9 @@ DMOD_BUILTIN_API( dmenv, 1.0, const char*      , _get, ( const char* name ) );
  * 
  * @param prefix    Prefix to match against variable names.
  * @param callback  Callback function to call for each matching variable.
+ *                  WARNING: The callback is executed while holding the internal
+ *                  lock. Do not call other dmenv functions from within the callback
+ *                  as this will cause a deadlock. Keep callback execution short.
  * @param user_data User data to pass to the callback.
  * 
  * @return Number of matching variables found.

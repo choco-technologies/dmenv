@@ -58,7 +58,7 @@ static env_entry_t* find_entry(const char* name) {
     
     env_entry_t* current = g_dmenv_context.head;
     while (current != NULL) {
-        if (strncmp(current->name, name, DMENV_MAX_NAME_LENGTH) == 0) {
+        if (strcmp(current->name, name) == 0) {
             return current;
         }
         current = current->next;
@@ -235,7 +235,7 @@ DMOD_INPUT_API_DECLARATION( dmenv, 1.0, bool, _remove, ( const char* name ) )
     env_entry_t* prev = NULL;
     
     while (current != NULL) {
-        if (strncmp(current->name, name, DMENV_MAX_NAME_LENGTH) == 0) {
+        if (strcmp(current->name, name) == 0) {
             // Found the entry to remove
             if (prev == NULL) {
                 // Removing the head
@@ -288,5 +288,9 @@ DMOD_INPUT_API_DECLARATION( dmenv, 1.0, size_t, _count, ( void ) )
         return 0;
     }
     
-    return g_dmenv_context.entry_count;
+    Dmod_EnterCritical();
+    size_t count = g_dmenv_context.entry_count;
+    Dmod_ExitCritical();
+    
+    return count;
 }
