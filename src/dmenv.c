@@ -88,8 +88,8 @@ DMOD_INPUT_API_DECLARATION( dmenv, 1.0, dmenv_ctx_t, _create, ( dmenv_ctx_t pare
     ctx->parent = parent;
     ctx->entry_count = 0;
     
-    DMOD_LOG_INFO("== dmenv ver. %s ==", DMENV_VERSION);
-    DMOD_LOG_INFO("Created context %p with parent %p", ctx, parent);
+    DMOD_LOG_INFO("== dmenv ver. %s ==\n", DMENV_VERSION);
+    DMOD_LOG_INFO("Created context %p with parent %p\n", ctx, parent);
     
     Dmod_ExitCritical();
     
