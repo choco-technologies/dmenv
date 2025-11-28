@@ -77,7 +77,11 @@ if(ENABLE_COVERAGE)
     target_link_options(${MODULE_NAME} PRIVATE --coverage)
 endif()
 
-create_library_makefile(${MODULE_NAME})
+# Only run create_library_makefile if not in CI environment
+# The memory_analysis.cmake script path has issues in FetchContent context
+if(NOT DEFINED ENV{CI} AND COMMAND create_library_makefile)
+    create_library_makefile(${MODULE_NAME})
+endif()
 
 # ======================================================================
 #               Tests
