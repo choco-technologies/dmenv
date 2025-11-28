@@ -51,18 +51,55 @@ DMOD_BUILTIN_API(dmenv, 1.0, void, _destroy, (dmenv_ctx_t ctx));
 DMOD_BUILTIN_API(dmenv, 1.0, bool, _is_valid, (dmenv_ctx_t ctx));
 
 /**
- * @brief Set the default context
+ * @brief Set the root context
  *
- * @param ctx Context to set as default
+ * Sets the global root context. The root context serves as the base context
+ * when no other contexts have been pushed onto the context stack.
+ *
+ * @param ctx Context to set as root context
  */
-DMOD_BUILTIN_API(dmenv, 1.0, void, _set_as_default, (dmenv_ctx_t ctx));
+DMOD_BUILTIN_API(dmenv, 1.0, void, _set_root_context, (dmenv_ctx_t ctx));
 
 /**
- * @brief Get the default context
+ * @brief Get the root context
  *
- * @return Pointer to the default context, or NULL if not set
+ * @return Pointer to the root context, or NULL if not set
  */
-DMOD_BUILTIN_API(dmenv, 1.0, dmenv_ctx_t, _get_default, (void));
+DMOD_BUILTIN_API(dmenv, 1.0, dmenv_ctx_t, _get_root_context, (void));
+
+/**
+ * @brief Push a context onto the context stack
+ *
+ * Pushes the specified context onto the context stack, making it the current
+ * context. When accessing variables through the current context, this context
+ * will be used instead of the root context.
+ *
+ * @param ctx Context to push onto the stack
+ *
+ * @return true if the context was pushed successfully, false otherwise (e.g., stack overflow or invalid context)
+ */
+DMOD_BUILTIN_API(dmenv, 1.0, bool, _push_context, (dmenv_ctx_t ctx));
+
+/**
+ * @brief Pop the current context from the context stack
+ *
+ * Removes the top context from the context stack. After popping, the previous
+ * context on the stack becomes the current context. If the stack is empty,
+ * the root context becomes the current context.
+ *
+ * @return Pointer to the popped context, or NULL if the stack was empty
+ */
+DMOD_BUILTIN_API(dmenv, 1.0, dmenv_ctx_t, _pop_context, (void));
+
+/**
+ * @brief Get the current context
+ *
+ * Returns the current active context. If contexts have been pushed onto the
+ * stack, returns the top context. Otherwise, returns the root context.
+ *
+ * @return Pointer to the current context, or NULL if no context is set
+ */
+DMOD_BUILTIN_API(dmenv, 1.0, dmenv_ctx_t, _get_current_context, (void));
 
 /**
  * @brief Set an environment variable (string value)

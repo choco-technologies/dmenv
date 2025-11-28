@@ -211,14 +211,133 @@ void test_inheritance_override(void) {
     dmenv_destroy(parent);
 }
 
-void test_default_context(void) {
+void test_root_context(void) {
     dmenv_ctx_t ctx = dmenv_create(NULL);
-    dmenv_set_as_default(ctx);
+    dmenv_set_root_context(ctx);
     
-    dmenv_ctx_t retrieved = dmenv_get_default();
+    dmenv_ctx_t retrieved = dmenv_get_root_context();
     TEST_ASSERT_EQUAL_PTR(ctx, retrieved);
     
     dmenv_destroy(ctx);
+}
+
+void test_push_pop_context(void) {
+    dmenv_ctx_t root = dmenv_create(NULL);
+    dmenv_ctx_t ctx1 = dmenv_create(NULL);
+    dmenv_ctx_t ctx2 = dmenv_create(NULL);
+    
+    // Set root context
+    dmenv_set_root_context(root);
+    
+    // Initially, current context should be root
+    TEST_ASSERT_EQUAL_PTR(root, dmenv_get_current_context());
+    
+    // Push ctx1
+    TEST_ASSERT_TRUE(dmenv_push_context(ctx1));
+    TEST_ASSERT_EQUAL_PTR(ctx1, dmenv_get_current_context());
+    
+    // Push ctx2
+    TEST_ASSERT_TRUE(dmenv_push_context(ctx2));
+    TEST_ASSERT_EQUAL_PTR(ctx2, dmenv_get_current_context());
+    
+    // Pop ctx2
+    dmenv_ctx_t popped = dmenv_pop_context();
+    TEST_ASSERT_EQUAL_PTR(ctx2, popped);
+    TEST_ASSERT_EQUAL_PTR(ctx1, dmenv_get_current_context());
+    
+    // Pop ctx1
+    popped = dmenv_pop_context();
+    TEST_ASSERT_EQUAL_PTR(ctx1, popped);
+    TEST_ASSERT_EQUAL_PTR(root, dmenv_get_current_context());
+    
+    // Pop from empty stack should return NULL
+    popped = dmenv_pop_context();
+    TEST_ASSERT_NULL(popped);
+    
+    // Current context should still be root
+    TEST_ASSERT_EQUAL_PTR(root, dmenv_get_current_context());
+    
+    dmenv_destroy(ctx2);
+    dmenv_destroy(ctx1);
+    dmenv_destroy(root);
+}
+
+void test_push_invalid_context(void) {
+    TEST_ASSERT_FALSE(dmenv_push_context(NULL));
+}
+
+void test_current_context_without_root(void) {
+    // Clear root context first
+    dmenv_set_root_context(NULL);
+    
+    // Without root context and empty stack, get_current_context should return NULL
+    TEST_ASSERT_NULL(dmenv_get_current_context());
+    
+    // Create and push a context
+    dmenv_ctx_t ctx = dmenv_create(NULL);
+    TEST_ASSERT_TRUE(dmenv_push_context(ctx));
+    TEST_ASSERT_EQUAL_PTR(ctx, dmenv_get_current_context());
+    
+    // Pop it
+    dmenv_pop_context();
+    TEST_ASSERT_NULL(dmenv_get_current_context());
+    
+    dmenv_destroy(ctx);
+}
+
+void test_context_stack_variables(void) {
+    dmenv_ctx_t root = dmenv_create(NULL);
+    dmenv_ctx_t child = dmenv_create(NULL);
+    
+    dmenv_set_root_context(root);
+    
+    // Set variable in root context
+    dmenv_set(root, "ROOT_VAR", "root_value");
+    dmenv_set(root, "SHARED", "root_shared");
+    
+    // Set variable in child context
+    dmenv_set(child, "CHILD_VAR", "child_value");
+    dmenv_set(child, "SHARED", "child_shared");
+    
+    // Initially current is root
+    TEST_ASSERT_EQUAL_STRING("root_value", dmenv_get(dmenv_get_current_context(), "ROOT_VAR"));
+    TEST_ASSERT_EQUAL_STRING("root_shared", dmenv_get(dmenv_get_current_context(), "SHARED"));
+    
+    // Push child context
+    dmenv_push_context(child);
+    
+    // Now current is child
+    TEST_ASSERT_EQUAL_STRING("child_value", dmenv_get(dmenv_get_current_context(), "CHILD_VAR"));
+    TEST_ASSERT_EQUAL_STRING("child_shared", dmenv_get(dmenv_get_current_context(), "SHARED"));
+    TEST_ASSERT_NULL(dmenv_get(dmenv_get_current_context(), "ROOT_VAR")); // Not in child's direct context
+    
+    // Pop child
+    dmenv_pop_context();
+    
+    // Back to root
+    TEST_ASSERT_EQUAL_STRING("root_value", dmenv_get(dmenv_get_current_context(), "ROOT_VAR"));
+    TEST_ASSERT_EQUAL_STRING("root_shared", dmenv_get(dmenv_get_current_context(), "SHARED"));
+    
+    dmenv_destroy(child);
+    dmenv_destroy(root);
+}
+
+void test_destroy_removes_from_stack(void) {
+    dmenv_ctx_t root = dmenv_create(NULL);
+    dmenv_ctx_t ctx = dmenv_create(NULL);
+    
+    dmenv_set_root_context(root);
+    dmenv_push_context(ctx);
+    
+    TEST_ASSERT_EQUAL_PTR(ctx, dmenv_get_current_context());
+    
+    // Destroy the pushed context
+    dmenv_destroy(ctx);
+    
+    // Current should now be root since ctx was removed from stack
+    TEST_ASSERT_EQUAL_PTR(root, dmenv_get_current_context());
+    
+    dmenv_destroy(root);
 }
 
 int main(void) {
@@ -243,7 +362,12 @@ int main(void) {
     RUN_TEST(test_geti_decimal);
     RUN_TEST(test_inheritance);
     RUN_TEST(test_inheritance_override);
-    RUN_TEST(test_default_context);
+    RUN_TEST(test_root_context);
+    RUN_TEST(test_push_pop_context);
+    RUN_TEST(test_push_invalid_context);
+    RUN_TEST(test_current_context_without_root);
+    RUN_TEST(test_context_stack_variables);
+    RUN_TEST(test_destroy_removes_from_stack);
     
     return UNITY_END();
 }
