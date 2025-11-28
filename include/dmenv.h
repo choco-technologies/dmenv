@@ -102,22 +102,6 @@ DMOD_BUILTIN_API(dmenv, 1.0, dmenv_ctx_t, _pop_context, (void));
 DMOD_BUILTIN_API(dmenv, 1.0, dmenv_ctx_t, _get_current_context, (void));
 
 /**
- * @brief Set the default context (deprecated, use dmenv_set_root_context instead)
- *
- * @param ctx Context to set as default
- * @deprecated Use dmenv_set_root_context instead
- */
-DMOD_BUILTIN_API(dmenv, 1.0, void, _set_as_default, (dmenv_ctx_t ctx));
-
-/**
- * @brief Get the default context (deprecated, use dmenv_get_root_context instead)
- *
- * @return Pointer to the default context, or NULL if not set
- * @deprecated Use dmenv_get_root_context instead
- */
-DMOD_BUILTIN_API(dmenv, 1.0, dmenv_ctx_t, _get_default, (void));
-
-/**
  * @brief Set an environment variable (string value)
  *
  * @param ctx   Context to set the variable in

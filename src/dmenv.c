@@ -264,18 +264,6 @@ DMOD_INPUT_API_DECLARATION(dmenv, 1.0, dmenv_ctx_t, _get_current_context, (void)
     return ctx;
 }
 
-DMOD_INPUT_API_DECLARATION(dmenv, 1.0, void, _set_as_default, (dmenv_ctx_t ctx))
-{
-    // Deprecated: delegates to set_root_context for backward compatibility
-    dmenv_set_root_context(ctx);
-}
-
-DMOD_INPUT_API_DECLARATION(dmenv, 1.0, dmenv_ctx_t, _get_default, (void))
-{
-    // Deprecated: delegates to get_root_context for backward compatibility
-    return dmenv_get_root_context();
-}
-
 DMOD_INPUT_API_DECLARATION(dmenv, 1.0, bool, _set, (dmenv_ctx_t ctx, const char *name, const char *value))
 {
     if (!dmenv_is_valid(ctx))

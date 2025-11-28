@@ -211,26 +211,12 @@ void test_inheritance_override(void) {
     dmenv_destroy(parent);
 }
 
-void test_default_context(void) {
-    dmenv_ctx_t ctx = dmenv_create(NULL);
-    dmenv_set_as_default(ctx);
-    
-    dmenv_ctx_t retrieved = dmenv_get_default();
-    TEST_ASSERT_EQUAL_PTR(ctx, retrieved);
-    
-    dmenv_destroy(ctx);
-}
-
 void test_root_context(void) {
     dmenv_ctx_t ctx = dmenv_create(NULL);
     dmenv_set_root_context(ctx);
     
     dmenv_ctx_t retrieved = dmenv_get_root_context();
     TEST_ASSERT_EQUAL_PTR(ctx, retrieved);
-    
-    // Verify backward compatibility: get_default should return root context
-    dmenv_ctx_t default_ctx = dmenv_get_default();
-    TEST_ASSERT_EQUAL_PTR(ctx, default_ctx);
     
     dmenv_destroy(ctx);
 }
@@ -376,7 +362,6 @@ int main(void) {
     RUN_TEST(test_geti_decimal);
     RUN_TEST(test_inheritance);
     RUN_TEST(test_inheritance_override);
-    RUN_TEST(test_default_context);
     RUN_TEST(test_root_context);
     RUN_TEST(test_push_pop_context);
     RUN_TEST(test_push_invalid_context);
