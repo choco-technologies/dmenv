@@ -25,16 +25,19 @@ target_link_libraries(test_common INTERFACE dmod_inc)
 # Test: Simple test
 add_executable(test_simple test_simple.c)
 target_link_libraries(test_simple PRIVATE dmenv unity test_common dmod_system)
+target_link_options(test_simple PRIVATE -L ${DMOD_DIR}/scripts -T ${DMOD_DIR}/scripts/main.ld)
 add_test(NAME test_simple COMMAND test_simple)
 
 # Test: Unit tests
 add_executable(test_dmenv_unit test_dmenv_unit.c)
 target_link_libraries(test_dmenv_unit PRIVATE dmenv unity test_common dmod_system)
+target_link_options(test_dmenv_unit PRIVATE -L ${DMOD_DIR}/scripts -T ${DMOD_DIR}/scripts/main.ld)
 add_test(NAME test_dmenv_unit COMMAND test_dmenv_unit)
 
 # Test: Minimal test
 add_executable(test_minimal test_minimal.c)
 target_link_libraries(test_minimal PRIVATE dmenv unity test_common dmod_system)
+target_link_options(test_minimal PRIVATE -L ${DMOD_DIR}/scripts -T ${DMOD_DIR}/scripts/main.ld)
 add_test(NAME test_minimal COMMAND test_minimal)
 
 # Enable coverage for test executables if requested
