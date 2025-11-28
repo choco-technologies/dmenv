@@ -7,6 +7,10 @@
 #define DMENV_MAGIC_NUMBER 0x444D454E // "DMEN" in hex
 #endif
 
+#ifndef DMENV_CONTEXT_STACK_SIZE
+#define DMENV_CONTEXT_STACK_SIZE 16
+#endif
+
 /**
  * @brief Structure to hold an environment variable entry
  */
@@ -28,7 +32,16 @@ typedef struct dmenv_ctx
     size_t entry_count;
 } dmenv_ctx_internal_t;
 
-static dmenv_ctx_t g_default_context = NULL;
+/**
+ * @brief Global root context (previously named default context)
+ */
+static dmenv_ctx_t g_root_context = NULL;
+
+/**
+ * @brief Context stack for push/pop functionality
+ */
+static dmenv_ctx_t g_context_stack[DMENV_CONTEXT_STACK_SIZE];
+static size_t g_context_stack_top = 0;
 
 /**
  * @brief Helper function to find an entry by name in a context
@@ -129,10 +142,25 @@ DMOD_INPUT_API_DECLARATION(dmenv, 1.0, void, _destroy, (dmenv_ctx_t ctx))
         current = next;
     }
 
-    // If this is the default context, clear it
-    if (g_default_context == ctx)
+    // If this is the root context, clear it
+    if (g_root_context == ctx)
     {
-        g_default_context = NULL;
+        g_root_context = NULL;
+    }
+
+    // Remove from context stack if present
+    for (size_t i = 0; i < g_context_stack_top; i++)
+    {
+        if (g_context_stack[i] == ctx)
+        {
+            // Shift remaining contexts down
+            for (size_t j = i; j < g_context_stack_top - 1; j++)
+            {
+                g_context_stack[j] = g_context_stack[j + 1];
+            }
+            g_context_stack_top--;
+            break;
+        }
     }
 
     // Invalidate magic number
@@ -153,7 +181,7 @@ DMOD_INPUT_API_DECLARATION(dmenv, 1.0, bool, _is_valid, (dmenv_ctx_t ctx))
     return result;
 }
 
-DMOD_INPUT_API_DECLARATION(dmenv, 1.0, void, _set_as_default, (dmenv_ctx_t ctx))
+DMOD_INPUT_API_DECLARATION(dmenv, 1.0, void, _set_root_context, (dmenv_ctx_t ctx))
 {
     if (!dmenv_is_valid(ctx))
     {
@@ -162,14 +190,90 @@ DMOD_INPUT_API_DECLARATION(dmenv, 1.0, void, _set_as_default, (dmenv_ctx_t ctx))
     }
 
     Dmod_EnterCritical();
-    g_default_context = ctx;
-    DMOD_LOG_INFO("Set context %p as default\n", ctx);
+    g_root_context = ctx;
+    DMOD_LOG_INFO("Set context %p as root context\n", ctx);
     Dmod_ExitCritical();
+}
+
+DMOD_INPUT_API_DECLARATION(dmenv, 1.0, dmenv_ctx_t, _get_root_context, (void))
+{
+    return g_root_context;
+}
+
+DMOD_INPUT_API_DECLARATION(dmenv, 1.0, bool, _push_context, (dmenv_ctx_t ctx))
+{
+    if (!dmenv_is_valid(ctx))
+    {
+        DMOD_LOG_ERROR("Invalid context\n");
+        return false;
+    }
+
+    Dmod_EnterCritical();
+
+    if (g_context_stack_top >= DMENV_CONTEXT_STACK_SIZE)
+    {
+        DMOD_LOG_ERROR("Context stack overflow\n");
+        Dmod_ExitCritical();
+        return false;
+    }
+
+    g_context_stack[g_context_stack_top] = ctx;
+    g_context_stack_top++;
+
+    DMOD_LOG_INFO("Pushed context %p onto stack (depth: %zu)\n", ctx, g_context_stack_top);
+
+    Dmod_ExitCritical();
+    return true;
+}
+
+DMOD_INPUT_API_DECLARATION(dmenv, 1.0, dmenv_ctx_t, _pop_context, (void))
+{
+    Dmod_EnterCritical();
+
+    if (g_context_stack_top == 0)
+    {
+        DMOD_LOG_INFO("Context stack is empty, nothing to pop\n");
+        Dmod_ExitCritical();
+        return NULL;
+    }
+
+    g_context_stack_top--;
+    dmenv_ctx_t ctx = g_context_stack[g_context_stack_top];
+
+    DMOD_LOG_INFO("Popped context %p from stack (depth: %zu)\n", ctx, g_context_stack_top);
+
+    Dmod_ExitCritical();
+    return ctx;
+}
+
+DMOD_INPUT_API_DECLARATION(dmenv, 1.0, dmenv_ctx_t, _get_current_context, (void))
+{
+    Dmod_EnterCritical();
+
+    dmenv_ctx_t ctx;
+    if (g_context_stack_top > 0)
+    {
+        ctx = g_context_stack[g_context_stack_top - 1];
+    }
+    else
+    {
+        ctx = g_root_context;
+    }
+
+    Dmod_ExitCritical();
+    return ctx;
+}
+
+DMOD_INPUT_API_DECLARATION(dmenv, 1.0, void, _set_as_default, (dmenv_ctx_t ctx))
+{
+    // Deprecated: delegates to set_root_context for backward compatibility
+    dmenv_set_root_context(ctx);
 }
 
 DMOD_INPUT_API_DECLARATION(dmenv, 1.0, dmenv_ctx_t, _get_default, (void))
 {
-    return g_default_context;
+    // Deprecated: delegates to get_root_context for backward compatibility
+    return dmenv_get_root_context();
 }
 
 DMOD_INPUT_API_DECLARATION(dmenv, 1.0, bool, _set, (dmenv_ctx_t ctx, const char *name, const char *value))
@@ -463,7 +567,10 @@ DMOD_INPUT_API_DECLARATION(dmenv, 1.0, size_t, _count, (dmenv_ctx_t ctx))
 
 #ifndef DMENV_DONT_IMPLEMENT_DMOD_API
 /**
- * @brief Set an environment variable in the default context (DMOD API)
+ * @brief Set an environment variable in the current context (DMOD API)
+ *
+ * Uses the current context (top of stack if any contexts are pushed,
+ * otherwise the root context).
  *
  * @param Name Name of the environment variable
  * @param Value Value to set
@@ -472,10 +579,10 @@ DMOD_INPUT_API_DECLARATION(dmenv, 1.0, size_t, _count, (dmenv_ctx_t ctx))
  */
 DMOD_INPUT_API_DECLARATION(Dmod, 1.0, int, _SetEnv, (const char *Name, const char *Value, int Overwrite))
 {
-    dmenv_ctx_t ctx = dmenv_get_default();
+    dmenv_ctx_t ctx = dmenv_get_current_context();
     if (ctx == NULL)
     {
-        DMOD_LOG_ERROR("No default context set for Dmod_SetEnv\n");
+        DMOD_LOG_ERROR("No context available for Dmod_SetEnv\n");
         return -1;
     }
     
@@ -496,17 +603,20 @@ DMOD_INPUT_API_DECLARATION(Dmod, 1.0, int, _SetEnv, (const char *Name, const cha
 }
 
 /**
- * @brief Get an environment variable from the default context (DMOD API)
+ * @brief Get an environment variable from the current context (DMOD API)
+ *
+ * Uses the current context (top of stack if any contexts are pushed,
+ * otherwise the root context).
  *
  * @param Name Name of the environment variable
  * @return const char* Value if found, NULL otherwise
  */
 DMOD_INPUT_API_DECLARATION(Dmod, 1.0, const char *, _GetEnv, (const char *Name))
 {
-    dmenv_ctx_t ctx = dmenv_get_default();
+    dmenv_ctx_t ctx = dmenv_get_current_context();
     if (ctx == NULL)
     {
-        DMOD_LOG_ERROR("No default context set for Dmod_GetEnv\n");
+        DMOD_LOG_ERROR("No context available for Dmod_GetEnv\n");
         return NULL;
     }
     return dmenv_get(ctx, Name);
