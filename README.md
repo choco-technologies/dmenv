@@ -40,6 +40,7 @@ DMOD provides a modular architecture that makes embedded systems more flexible, 
 - **Simple key-value storage**: Store configuration parameters as name-value pairs
 - **Context-based management**: Create multiple isolated environment contexts
 - **Context inheritance**: Child contexts can inherit variables from parent contexts
+- **Context stack**: Push and pop contexts for temporary context switching
 - **Thread-safe operations**: Uses DMOD's critical section mechanisms
 - **Prefix-based search**: Find all variables matching a specific prefix
 - **Efficient lookup**: Fast variable retrieval using linked list structure
@@ -52,6 +53,8 @@ dmenv is ideal for storing application configuration, runtime parameters, and in
 
 - ✅ **Context-based management**: Create multiple isolated environment contexts
 - ✅ **Context inheritance**: Child contexts can inherit variables from parent contexts
+- ✅ **Context stack**: Push and pop contexts for temporary context switching
+- ✅ **Root context**: Set a global root context as the base fallback
 - ✅ **Key-value storage**: Store and retrieve environment variables by name
 - ✅ **Variable update**: Update existing variables without creating duplicates
 - ✅ **Variable removal**: Remove individual variables or clear all at once
@@ -149,7 +152,8 @@ dmenv includes comprehensive test suites:
    - Integer operations (seti/geti)
    - Context inheritance
    - Context override behavior
-   - Default context management
+   - Root context management
+   - Context stack push/pop operations
    - Multiple variable stress tests
 
 ### Running Tests
@@ -295,6 +299,44 @@ void reset_example(void) {
 }
 ```
 
+### Context Stack Example
+
+```c
+#include "dmenv.h"
+
+void context_stack_example(void) {
+    // Create root and temporary contexts
+    dmenv_ctx_t root = dmenv_create(NULL);
+    dmenv_ctx_t temp = dmenv_create(NULL);
+    
+    // Set root context as the base
+    dmenv_set_root_context(root);
+    dmenv_set(root, "MODE", "production");
+    
+    // Get current context (returns root)
+    dmenv_ctx_t current = dmenv_get_current_context();
+    printf("Mode: %s\n", dmenv_get(current, "MODE"));  // Prints: production
+    
+    // Push temporary context for testing
+    dmenv_push_context(temp);
+    dmenv_set(temp, "MODE", "testing");
+    
+    // Get current context (returns temp)
+    current = dmenv_get_current_context();
+    printf("Mode: %s\n", dmenv_get(current, "MODE"));  // Prints: testing
+    
+    // Pop temporary context
+    dmenv_pop_context();
+    
+    // Get current context (returns root again)
+    current = dmenv_get_current_context();
+    printf("Mode: %s\n", dmenv_get(current, "MODE"));  // Prints: production
+    
+    dmenv_destroy(temp);
+    dmenv_destroy(root);
+}
+```
+
 ### Integration Example
 
 ```c
@@ -393,27 +435,62 @@ Check if a context is valid.
 - **Returns:** `true` if valid, `false` otherwise
 - **Thread-safe:** Yes
 
-#### `dmenv_set_as_default`
+#### `dmenv_set_root_context`
 
 ```c
-void dmenv_set_as_default(dmenv_ctx_t ctx);
+void dmenv_set_root_context(dmenv_ctx_t ctx);
 ```
 
-Set the default context.
+Set the root context. The root context serves as the base context when no other contexts have been pushed onto the context stack.
 
 - **Parameters:**
-  - `ctx`: Context to set as default
+  - `ctx`: Context to set as root context
 - **Thread-safe:** Yes
 
-#### `dmenv_get_default`
+#### `dmenv_get_root_context`
 
 ```c
-dmenv_ctx_t dmenv_get_default(void);
+dmenv_ctx_t dmenv_get_root_context(void);
 ```
 
-Get the default context.
+Get the root context.
 
-- **Returns:** Pointer to the default context, or NULL if not set
+- **Returns:** Pointer to the root context, or NULL if not set
+- **Thread-safe:** Yes
+
+#### `dmenv_push_context`
+
+```c
+bool dmenv_push_context(dmenv_ctx_t ctx);
+```
+
+Push a context onto the context stack. The pushed context becomes the current context.
+
+- **Parameters:**
+  - `ctx`: Context to push onto the stack
+- **Returns:** `true` if the context was pushed successfully, `false` otherwise (e.g., stack overflow or invalid context)
+- **Thread-safe:** Yes
+
+#### `dmenv_pop_context`
+
+```c
+dmenv_ctx_t dmenv_pop_context(void);
+```
+
+Pop the current context from the context stack. After popping, the previous context on the stack becomes the current context. If the stack is empty, the root context becomes the current context.
+
+- **Returns:** Pointer to the popped context, or NULL if the stack was empty
+- **Thread-safe:** Yes
+
+#### `dmenv_get_current_context`
+
+```c
+dmenv_ctx_t dmenv_get_current_context(void);
+```
+
+Get the current context. Returns the top context from the stack if any contexts have been pushed, otherwise returns the root context.
+
+- **Returns:** Pointer to the current context, or NULL if no context is set
 - **Thread-safe:** Yes
 
 ### Variable Operations
