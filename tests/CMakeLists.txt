@@ -22,25 +22,39 @@ target_include_directories(test_common INTERFACE
 )
 target_link_libraries(test_common INTERFACE dmod_inc)
 
-# Common linker options for all tests
-set(TEST_LINK_OPTIONS -L ${DMOD_DIR}/scripts -T ${DMOD_DIR}/scripts/main.ld)
+# Common linker options for all tests (only when not using coverage)
+# The custom linker script is for embedded targets and interferes with coverage data generation
+if(NOT ENABLE_COVERAGE)
+    set(TEST_LINK_OPTIONS -L ${DMOD_DIR}/scripts -T ${DMOD_DIR}/scripts/main.ld)
+endif()
+
+# Coverage stubs - provides symbols normally defined by the linker script
+if(ENABLE_COVERAGE)
+    set(COVERAGE_STUBS coverage_stubs.c)
+endif()
 
 # Test: Simple test
-add_executable(test_simple test_simple.c)
+add_executable(test_simple test_simple.c ${COVERAGE_STUBS})
 target_link_libraries(test_simple PRIVATE dmenv unity test_common dmod_system)
-target_link_options(test_simple PRIVATE ${TEST_LINK_OPTIONS})
+if(TEST_LINK_OPTIONS)
+    target_link_options(test_simple PRIVATE ${TEST_LINK_OPTIONS})
+endif()
 add_test(NAME test_simple COMMAND test_simple)
 
 # Test: Unit tests
-add_executable(test_dmenv_unit test_dmenv_unit.c)
+add_executable(test_dmenv_unit test_dmenv_unit.c ${COVERAGE_STUBS})
 target_link_libraries(test_dmenv_unit PRIVATE dmenv unity test_common dmod_system)
-target_link_options(test_dmenv_unit PRIVATE ${TEST_LINK_OPTIONS})
+if(TEST_LINK_OPTIONS)
+    target_link_options(test_dmenv_unit PRIVATE ${TEST_LINK_OPTIONS})
+endif()
 add_test(NAME test_dmenv_unit COMMAND test_dmenv_unit)
 
 # Test: Minimal test
-add_executable(test_minimal test_minimal.c)
+add_executable(test_minimal test_minimal.c ${COVERAGE_STUBS})
 target_link_libraries(test_minimal PRIVATE dmenv unity test_common dmod_system)
-target_link_options(test_minimal PRIVATE ${TEST_LINK_OPTIONS})
+if(TEST_LINK_OPTIONS)
+    target_link_options(test_minimal PRIVATE ${TEST_LINK_OPTIONS})
+endif()
 add_test(NAME test_minimal COMMAND test_minimal)
 
 # Enable coverage for test executables if requested
