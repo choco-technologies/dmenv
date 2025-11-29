@@ -168,7 +168,7 @@ DMOD_INPUT_API_DECLARATION(dmenv, 1.0, void, _destroy, (dmenv_ctx_t ctx))
 
     Dmod_FreeEx(ctx, false);
 
-    DMOD_LOG_INFO("Destroyed context %p\n", ctx);
+    DMOD_LOG_VERBOSE("Destroyed context %p\n", ctx);
 
     Dmod_ExitCritical();
 }
@@ -191,7 +191,7 @@ DMOD_INPUT_API_DECLARATION(dmenv, 1.0, void, _set_root_context, (dmenv_ctx_t ctx
 
     Dmod_EnterCritical();
     g_root_context = ctx;
-    DMOD_LOG_INFO("Set context %p as root context\n", ctx);
+    DMOD_LOG_VERBOSE("Set context %p as root context\n", ctx);
     Dmod_ExitCritical();
 }
 
@@ -220,7 +220,7 @@ DMOD_INPUT_API_DECLARATION(dmenv, 1.0, bool, _push_context, (dmenv_ctx_t ctx))
     g_context_stack[g_context_stack_top] = ctx;
     g_context_stack_top++;
 
-    DMOD_LOG_INFO("Pushed context %p onto stack (depth: %zu)\n", ctx, g_context_stack_top);
+    DMOD_LOG_VERBOSE("Pushed context %p onto stack (depth: %zu)\n", ctx, g_context_stack_top);
 
     Dmod_ExitCritical();
     return true;
@@ -232,7 +232,7 @@ DMOD_INPUT_API_DECLARATION(dmenv, 1.0, dmenv_ctx_t, _pop_context, (void))
 
     if (g_context_stack_top == 0)
     {
-        DMOD_LOG_INFO("Context stack is empty, nothing to pop\n");
+        DMOD_LOG_VERBOSE("Context stack is empty, nothing to pop\n");
         Dmod_ExitCritical();
         return NULL;
     }
@@ -240,7 +240,7 @@ DMOD_INPUT_API_DECLARATION(dmenv, 1.0, dmenv_ctx_t, _pop_context, (void))
     g_context_stack_top--;
     dmenv_ctx_t ctx = g_context_stack[g_context_stack_top];
 
-    DMOD_LOG_INFO("Popped context %p from stack (depth: %zu)\n", ctx, g_context_stack_top);
+    DMOD_LOG_VERBOSE("Popped context %p from stack (depth: %zu)\n", ctx, g_context_stack_top);
 
     Dmod_ExitCritical();
     return ctx;
@@ -338,7 +338,7 @@ DMOD_INPUT_API_DECLARATION(dmenv, 1.0, bool, _set, (dmenv_ctx_t ctx, const char 
     internal->head = entry;
     internal->entry_count++;
 
-    DMOD_LOG_INFO("Set variable %s = %s\n", name, value);
+    DMOD_LOG_VERBOSE("Set variable %s = %s\n", name, value);
 
     Dmod_ExitCritical();
 
@@ -490,7 +490,7 @@ DMOD_INPUT_API_DECLARATION(dmenv, 1.0, bool, _remove, (dmenv_ctx_t ctx, const ch
 
             internal->entry_count--;
 
-            DMOD_LOG_INFO("Removed variable %s\n", name);
+            DMOD_LOG_VERBOSE("Removed variable %s\n", name);
 
             Dmod_ExitCritical();
             return true;
@@ -501,7 +501,7 @@ DMOD_INPUT_API_DECLARATION(dmenv, 1.0, bool, _remove, (dmenv_ctx_t ctx, const ch
 
     Dmod_ExitCritical();
 
-    DMOD_LOG_INFO("Variable %s not found for removal\n", name);
+    DMOD_LOG_VERBOSE("Variable %s not found for removal\n", name);
     return false;
 }
 
@@ -531,7 +531,7 @@ DMOD_INPUT_API_DECLARATION(dmenv, 1.0, bool, _clear, (dmenv_ctx_t ctx))
     internal->head = NULL;
     internal->entry_count = 0;
 
-    DMOD_LOG_INFO("Cleared all environment variables\n");
+    DMOD_LOG_VERBOSE("Cleared all environment variables\n");
 
     Dmod_ExitCritical();
 
@@ -573,7 +573,7 @@ DMOD_INPUT_API_DECLARATION(Dmod, 1.0, int, _SetEnv, (const char *Name, const cha
         DMOD_LOG_ERROR("No context available for Dmod_SetEnv\n");
         return -1;
     }
-    
+
     // If Overwrite is 0 and variable already exists, return success without updating
     if (Overwrite == 0)
     {
@@ -584,7 +584,7 @@ DMOD_INPUT_API_DECLARATION(Dmod, 1.0, int, _SetEnv, (const char *Name, const cha
             return 0;
         }
     }
-    
+
     // Set or update the variable
     bool result = dmenv_set(ctx, Name, Value);
     return result ? 0 : -1;
