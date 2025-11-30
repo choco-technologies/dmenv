@@ -367,11 +367,11 @@ DMOD_INPUT_API_DECLARATION(dmenv, 1.0, const char *, _get, (dmenv_ctx_t ctx, con
 
     if (entry != NULL)
     {
-        DMOD_LOG_INFO("Get variable %s = %s\n", name, entry->value);
+        DMOD_LOG_VERBOSE("Get variable %s = %s\n", name, entry->value);
         return entry->value;
     }
 
-    DMOD_LOG_INFO("Variable %s not found\n", name);
+    DMOD_LOG_VERBOSE("Variable %s not found\n", name);
     return NULL;
 }
 
@@ -443,7 +443,7 @@ DMOD_INPUT_API_DECLARATION(dmenv, 1.0, size_t, _find, (dmenv_ctx_t ctx, const ch
 
     Dmod_ExitCritical();
 
-    DMOD_LOG_INFO("Found %zu variables with prefix '%s'\n", count, prefix);
+    DMOD_LOG_VERBOSE("Found %zu variables with prefix '%s'\n", count, prefix);
 
     return count;
 }
