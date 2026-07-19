@@ -1,3 +1,4 @@
+#include "dmod.h"
 #include "dmenv.h"
 #include <string.h>
 #include <stdio.h>

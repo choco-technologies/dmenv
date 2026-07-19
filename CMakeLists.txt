@@ -53,6 +53,7 @@ endif()
 set(MODULE_NAME dmenv)
 add_library(${MODULE_NAME} STATIC
     src/dmenv.c
+    src/dmenv_registrations.c
 )
 
 target_compile_definitions(${MODULE_NAME} 
