@@ -100,7 +100,7 @@ DMOD_INPUT_API_DECLARATION(dmenv, 1.0, dmenv_ctx_t, _create, (dmenv_ctx_t parent
 {
     Dmod_EnterCritical();
 
-    dmenv_ctx_internal_t *ctx = (dmenv_ctx_internal_t *)Dmod_MallocEx(sizeof(dmenv_ctx_internal_t), "dmenv");
+    dmenv_ctx_internal_t *ctx = (dmenv_ctx_internal_t *)Dmod_Malloc(sizeof(dmenv_ctx_internal_t));
     if (ctx == NULL)
     {
         DMOD_LOG_ERROR("Failed to allocate memory for context\n");
@@ -137,9 +137,9 @@ DMOD_INPUT_API_DECLARATION(dmenv, 1.0, void, _destroy, (dmenv_ctx_t ctx))
     while (current != NULL)
     {
         env_entry_t *next = current->next;
-        Dmod_FreeEx(current->name, false);
-        Dmod_FreeEx(current->value, false);
-        Dmod_FreeEx(current, false);
+        Dmod_Free(current->name);
+        Dmod_Free(current->value);
+        Dmod_Free(current);
         current = next;
     }
 
@@ -167,7 +167,7 @@ DMOD_INPUT_API_DECLARATION(dmenv, 1.0, void, _destroy, (dmenv_ctx_t ctx))
     // Invalidate magic number
     internal->magic = 0;
 
-    Dmod_FreeEx(ctx, false);
+    Dmod_Free(ctx);
 
     DMOD_LOG_VERBOSE("Destroyed context %p\n", ctx);
 
@@ -288,7 +288,7 @@ DMOD_INPUT_API_DECLARATION(dmenv, 1.0, bool, _set, (dmenv_ctx_t ctx, const char 
     if (existing != NULL)
     {
         // Update existing entry
-        char *new_value = (char *)Dmod_MallocEx(strlen(value) + 1, "dmenv");
+        char *new_value = (char *)Dmod_Malloc(strlen(value) + 1);
         if (new_value == NULL)
         {
             DMOD_LOG_ERROR("Failed to allocate memory for value\n");
@@ -296,7 +296,7 @@ DMOD_INPUT_API_DECLARATION(dmenv, 1.0, bool, _set, (dmenv_ctx_t ctx, const char 
             return false;
         }
         strcpy(new_value, value);
-        Dmod_FreeEx(existing->value, false);
+        Dmod_Free(existing->value);
         existing->value = new_value;
         DMOD_LOG_VERBOSE("Updated variable %s = %s\n", name, value);
         Dmod_ExitCritical();
@@ -304,7 +304,7 @@ DMOD_INPUT_API_DECLARATION(dmenv, 1.0, bool, _set, (dmenv_ctx_t ctx, const char 
     }
 
     // Create new entry
-    env_entry_t *entry = (env_entry_t *)Dmod_MallocEx(sizeof(env_entry_t), "dmenv");
+    env_entry_t *entry = (env_entry_t *)Dmod_Malloc(sizeof(env_entry_t));
     if (entry == NULL)
     {
         DMOD_LOG_ERROR("Failed to allocate memory for entry\n");
@@ -312,21 +312,21 @@ DMOD_INPUT_API_DECLARATION(dmenv, 1.0, bool, _set, (dmenv_ctx_t ctx, const char 
         return false;
     }
 
-    entry->name = (char *)Dmod_MallocEx(strlen(name) + 1, "dmenv");
+    entry->name = (char *)Dmod_Malloc(strlen(name) + 1);
     if (entry->name == NULL)
     {
         DMOD_LOG_ERROR("Failed to allocate memory for name\n");
-        Dmod_FreeEx(entry, false);
+        Dmod_Free(entry);
         Dmod_ExitCritical();
         return false;
     }
 
-    entry->value = (char *)Dmod_MallocEx(strlen(value) + 1, "dmenv");
+    entry->value = (char *)Dmod_Malloc(strlen(value) + 1);
     if (entry->value == NULL)
     {
         DMOD_LOG_ERROR("Failed to allocate memory for value\n");
-        Dmod_FreeEx(entry->name, false);
-        Dmod_FreeEx(entry, false);
+        Dmod_Free(entry->name);
+        Dmod_Free(entry);
         Dmod_ExitCritical();
         return false;
     }
@@ -485,9 +485,9 @@ DMOD_INPUT_API_DECLARATION(dmenv, 1.0, bool, _remove, (dmenv_ctx_t ctx, const ch
                 prev->next = current->next;
             }
 
-            Dmod_FreeEx(current->name, false);
-            Dmod_FreeEx(current->value, false);
-            Dmod_FreeEx(current, false);
+            Dmod_Free(current->name);
+            Dmod_Free(current->value);
+            Dmod_Free(current);
 
             internal->entry_count--;
 
@@ -523,9 +523,9 @@ DMOD_INPUT_API_DECLARATION(dmenv, 1.0, bool, _clear, (dmenv_ctx_t ctx))
     while (current != NULL)
     {
         env_entry_t *next = current->next;
-        Dmod_FreeEx(current->name, false);
-        Dmod_FreeEx(current->value, false);
-        Dmod_FreeEx(current, false);
+        Dmod_Free(current->name);
+        Dmod_Free(current->value);
+        Dmod_Free(current);
         current = next;
     }
 

@@ -67,10 +67,15 @@ target_include_directories(${MODULE_NAME}
         ${CMAKE_CURRENT_SOURCE_DIR}/include
 )   
 
-target_link_libraries(${MODULE_NAME} 
-    PRIVATE    
+target_link_libraries(${MODULE_NAME}
+    PRIVATE
         dmod_inc
     )
+
+# dmod_sal.h requires DMOD_CURRENT_ALLOCATOR to be defined on the system side -
+# set unconditionally (create_library_makefile() below also sets it, but is
+# skipped in CI, and dmenv.c needs this either way to compile).
+dmod_set_current_allocator(${MODULE_NAME})
 
 # Enable coverage for dmenv library if requested
 if(ENABLE_COVERAGE)
