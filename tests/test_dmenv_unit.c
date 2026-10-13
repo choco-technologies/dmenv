@@ -1,5 +1,6 @@
 #include "test_common.h"
 #include "dmenv.h"
+#include "dmod.h"
 #include "unity.h"
 #include <string.h>
 
@@ -340,6 +341,44 @@ void test_destroy_removes_from_stack(void) {
     dmenv_destroy(root);
 }
 
+void test_dmod_env_iteration_lists_exported_variables(void) {
+    dmenv_set_root_context(test_ctx);
+    TEST_ASSERT_EQUAL_INT(0, Dmod_SetEnv("EXPORT_FIRST", "one", 1));
+    TEST_ASSERT_EQUAL_INT(0, Dmod_SetEnv("EXPORT_SECOND", "two", 1));
+
+    const char *name = Dmod_GetNextEnvName(NULL);
+    TEST_ASSERT_NOT_NULL(name);
+    TEST_ASSERT_EQUAL_STRING("EXPORT_SECOND", name);
+    TEST_ASSERT_EQUAL_STRING("two", Dmod_GetEnv(name));
+
+    name = Dmod_GetNextEnvName(name);
+    TEST_ASSERT_NOT_NULL(name);
+    TEST_ASSERT_EQUAL_STRING("EXPORT_FIRST", name);
+    TEST_ASSERT_EQUAL_STRING("one", Dmod_GetEnv(name));
+    TEST_ASSERT_NULL(Dmod_GetNextEnvName(name));
+}
+
+void test_dmod_env_iteration_includes_inherited_without_duplicates(void) {
+    dmenv_ctx_t child = dmenv_create(test_ctx);
+    dmenv_set(test_ctx, "ROOT_ONLY", "root");
+    dmenv_set(test_ctx, "SHARED", "old");
+    dmenv_set(child, "SHARED", "new");
+    dmenv_set(child, "CHILD_ONLY", "child");
+    TEST_ASSERT_TRUE(dmenv_push_context(child));
+
+    const char *name = Dmod_GetNextEnvName(NULL);
+    TEST_ASSERT_EQUAL_STRING("CHILD_ONLY", name);
+    name = Dmod_GetNextEnvName(name);
+    TEST_ASSERT_EQUAL_STRING("SHARED", name);
+    TEST_ASSERT_EQUAL_STRING("new", Dmod_GetEnv(name));
+    name = Dmod_GetNextEnvName(name);
+    TEST_ASSERT_EQUAL_STRING("ROOT_ONLY", name);
+    TEST_ASSERT_NULL(Dmod_GetNextEnvName(name));
+
+    dmenv_pop_context();
+    dmenv_destroy(child);
+}
+
 int main(void) {
     UNITY_BEGIN();
     
@@ -368,6 +407,8 @@ int main(void) {
     RUN_TEST(test_current_context_without_root);
     RUN_TEST(test_context_stack_variables);
     RUN_TEST(test_destroy_removes_from_stack);
+    RUN_TEST(test_dmod_env_iteration_lists_exported_variables);
+    RUN_TEST(test_dmod_env_iteration_includes_inherited_without_duplicates);
     
     return UNITY_END();
 }

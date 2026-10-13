@@ -44,6 +44,7 @@ add_test(NAME test_simple COMMAND test_simple)
 # Test: Unit tests
 add_executable(test_dmenv_unit test_dmenv_unit.c ${COVERAGE_STUBS})
 target_link_libraries(test_dmenv_unit PRIVATE dmenv unity test_common dmod_system)
+dmod_set_current_allocator(test_dmenv_unit)
 if(TEST_LINK_OPTIONS)
     target_link_options(test_dmenv_unit PRIVATE ${TEST_LINK_OPTIONS})
 endif()

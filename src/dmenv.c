@@ -92,6 +92,38 @@ static env_entry_t *find_entry_with_inheritance(dmenv_ctx_t ctx, const char *nam
     return NULL;
 }
 
+/* Walk the visible names in lookup order, omitting names shadowed by a child. */
+static const char *next_env_name(dmenv_ctx_t ctx, const char *last)
+{
+    bool after_last = last == NULL;
+
+    for (dmenv_ctx_t scope = ctx; scope != NULL;
+         scope = ((dmenv_ctx_internal_t *)scope)->parent)
+    {
+        for (env_entry_t *entry = ((dmenv_ctx_internal_t *)scope)->head;
+             entry != NULL; entry = entry->next)
+        {
+            bool shadowed = false;
+            for (dmenv_ctx_t child = ctx; child != scope;
+                 child = ((dmenv_ctx_internal_t *)child)->parent)
+            {
+                if (find_entry(child, entry->name) != NULL)
+                {
+                    shadowed = true;
+                    break;
+                }
+            }
+            if (shadowed)
+                continue;
+            if (after_last)
+                return entry->name;
+            if (strcmp(entry->name, last) == 0)
+                after_last = true;
+        }
+    }
+    return NULL;
+}
+
 // ============================================================================
 //                           DMOD API Implementations
 // ============================================================================
@@ -609,5 +641,17 @@ DMOD_INPUT_API_DECLARATION(Dmod, 1.0, const char *, _GetEnv, (const char *Name))
         return NULL;
     }
     return dmenv_get(ctx, Name);
+}
+
+DMOD_INPUT_API_DECLARATION(Dmod, 1.0, const char *, _GetNextEnvName, (const char *Last))
+{
+    dmenv_ctx_t ctx = dmenv_get_current_context();
+    if (ctx == NULL)
+        return NULL;
+
+    Dmod_EnterCritical();
+    const char *name = next_env_name(ctx, Last);
+    Dmod_ExitCritical();
+    return name;
 }
 #endif // DMENV_DONT_IMPLEMENT_DMOD_API
